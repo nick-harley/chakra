@@ -1,0 +1,11 @@
+module PitchADT
+
+using Typeside, GIS
+
+abstract type Pitch <: GIS.Point end
+abstract type PitchInterval <: GIS.Interval end
+
+Typeside.@associatedType :pitch Pitch
+Typeside.@associatedType :pint PitchInterval
+
+end

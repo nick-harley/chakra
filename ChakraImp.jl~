@@ -1,0 +1,31 @@
+module ChakraImp
+
+using Typeside
+import ChakraSpec as ch
+
+struct Id <: ch.Id 
+    val::Int64
+end
+
+struct Cobj <: ch.Cobj
+    particles::List{Id}
+    attributes::Dict{Symbol,Any}
+end
+
+struct Struc <: ch.Struc
+    constituents::Dict{Id,Cobj}
+end
+
+delimit(ps::List{Id})::Cobj = Cobj(ps,Dict{Symbol,Any}())
+function setAtt(o::Cobj,a,v)::Cobj
+    o.attributes[n]=v
+    cobj(o.particles,o.attributes)
+end
+getAtt(o,a)::Option{Any} = get(o.attributes,n,none)
+particles(o::cobj)::List{id} = o.particles
+empty()::struc = struc(Dict{id,cobj}())
+lookup(x::id,s::struc)::Option{cobj} = get(s.constituents,x,none)
+insert(x::id,o::cobj,s::struc)::struc = s.constituents[x] = o
+domain(s::struc)::List{id} = keys(s.constituents)
+
+end
