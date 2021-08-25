@@ -1,32 +1,26 @@
 module Typeside
 
-export none, some, Option, List, associatedType, typ
+export none, Option, List, Typ, typ, associatedType
 
 struct Unit end
 unit = Unit()
-none = unit
-some(v) = v
+
 Option{T} = Union{T,Unit}
+none = unit
 
 List{T} = Vector{T}
 
-struct Val{n} end
-
-function Typ(::Val{n} where n)::DataType 
+function Typ(::Val{n} where n)
     println("There no associated type found")
     return Any
 end
 
-macro associatedType(n,T)
-    return quote
-        function Typ(::Val{$n})
-            $T
-        end
-    end
+function typ(n::Symbol)
+    Typ(Val{n}())
 end
 
-function typ(n::Symbol)::DataType
-    Typ(Val{n}())
+macro associatedType(n,T)
+    esc(:(Typeside.Typ(::Val{$n}) = $T))
 end
 
 end

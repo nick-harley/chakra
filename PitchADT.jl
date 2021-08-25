@@ -1,16 +1,18 @@
 module PitchADT
 
-export Pitch, PitchInterval, diff, shift, typ
+export Pitch, PitchInterval, diff, shift
 
-using Typeside, GIS
+using Typeside
 
-abstract type Pitch <: GIS.Point end
-abstract type PitchInterval <: GIS.Interval end
+abstract type Pitch end
+abstract type PitchInterval end
 
 function diff(p1::Pitch,p2::Pitch)::PitchInterval end
 function shift(i::PitchInterval,p::Pitch)::Pitch end
 
-Typeside.@associatedType :pitch Pitch
-Typeside.@associatedType :pint PitchInterval
+Typeside.@associatedType(:pitch,Pitch)
+Typeside.@associatedType(:pint,PitchInterval)
+
+println(methods(Typ))
 
 end
