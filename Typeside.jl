@@ -1,6 +1,6 @@
 module Typeside
 
-export none, Option, List, Typ, typ, associatedType
+export Unit, none, Option, List, Typ, typ, associatedType
 
 struct Unit end
 unit = Unit()

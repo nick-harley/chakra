@@ -2,6 +2,7 @@ module ChakraImp
 
 using Typeside
 using Chakra
+import Chakra: delimit, setAtt, getAtt, particles, empty, lookup, insert, domain
 
 struct Id <: Chakra.Id 
     val::Int64
@@ -16,13 +17,14 @@ struct Struc <: Chakra.Struc
     constituents::Dict{Id,Cobj}
 end
 
-Chakra.delimit(ps::List{Id})::Cobj = Cobj(ps,Dict{Symbol,Any}())
-Chakra.setAtt(o::Cobj,a,v)::Cobj = (o.attributes[a]=v; Cobj(o.particles,o.attributes))
-Chakra.getAtt(o,a)::Option{Any} = get(o.attributes,n,none)
-Chakra.particles(o::Cobj)::List{Id} = o.particles
-Chakra.empty()::Struc = Struc(Dict{Id,Cobj}())
-Chakra.lookup(x::Id,s::Struc)::Option{Cobj} = get(s.constituents,x,none)
-Chakra.insert(x::Id,o::Cobj,s::Struc)::Struc = (s.constituents[x] = o ; s)
-Chakra.domain(s::Struc)::List{id} = keys(s.constituents)
+delimit(ps::List{Id})::Cobj = Cobj(ps,Dict{Symbol,Any}())
+delimit()::Cobj = delimit(Id[])
+setAtt(o::Cobj,a::Symbol,v)::Cobj = (o.attributes[a]=v; Cobj(o.particles,o.attributes))
+getAtt(o::Cobj,a::Symbol)::Option{Any} = get(o.attributes,a,none)
+particles(o::Cobj)::List{Id} = o.particles
+empty()::Struc = Struc(Dict{Id,Cobj}())
+lookup(x::Id,s::Struc)::Option{Cobj} = get(s.constituents,x,none)
+insert(x::Id,o::Cobj,s::Struc)::Struc = (s.constituents[x] = o ; s)
+domain(s::Struc)::List{id} = keys(s.constituents)
 
 end

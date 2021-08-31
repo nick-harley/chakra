@@ -1,0 +1,42 @@
+module MVS
+
+export AtomicViewpoint, LinkedViewpoint, DerivedViewpoint, apply
+
+using Typeside, Chakra
+
+const Seq = Vector{T} where T<:Chakra.Cobj
+
+function head(s::Seq)::Option{Chakra.Cobj}
+    s[1]
+end
+
+
+abstract type Viewpoint end
+
+struct AtomicViewpoint <: Viewpoint
+    att::Symbol
+end
+
+struct LinkedViewpoint <: Viewpoint
+    elements::Array{Viewpoint}
+end
+
+struct DerivedViewpoint <: Viewpoint
+    vp::Viewpoint
+    fn::Function
+end
+
+
+function retType(v::Viewpoint)::DataType end
+
+retType(v::AtomicViewpoint)::DataType = typ(v.att)
+retType(v::LinkedViewpoint)::DataType = Tuple{map(retType,v.elements)...}
+retType(v::DerivedViewpoint)::DataType = Any
+
+
+apply(v::AtomicViewpoint,s::Seq) = getAtt(head(s),v.att)
+apply(v::LinkedViewpoint,s::Seq) = tuple(map(e -> apply(e,s), v.elements)...)
+apply(v::DerivedViewpoint,s::Seq) = v.fn(apply(v.vp,s)...)
+
+
+end

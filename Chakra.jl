@@ -12,11 +12,11 @@ function delimit(ps::List{Id})::Cobj
     error("No implementation of delim")
 end
 
-function setAtt(o::Cobj,a,v)::Cobj
+function setAtt(o::Cobj,a::Symbol,v)::Cobj
     error("No implementation of setAtt")
 end
 
-function getAtt(o::Cobj,a)::Option{Any}
+function getAtt(o::Cobj,a::Symbol)::Option{Any}
     error("No implementation of getAtt")
 end
 
