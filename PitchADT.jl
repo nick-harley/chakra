@@ -13,6 +13,4 @@ function shift(i::PitchInterval,p::Pitch)::Pitch end
 Typeside.@associatedType(:pitch,Pitch)
 Typeside.@associatedType(:pint,PitchInterval)
 
-println(methods(Typ))
-
 end

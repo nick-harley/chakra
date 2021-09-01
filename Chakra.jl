@@ -20,6 +20,8 @@ function getAtt(o::Cobj,a::Symbol)::Option{Any}
     error("No implementation of getAtt")
 end
 
+getAtt(a::Symbol) = o -> getAtt(o,a)
+
 function particles(o::Cobj)::List{Id}
     error("No implementation of getParts")
 end

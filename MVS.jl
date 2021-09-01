@@ -1,51 +1,69 @@
 module MVS
 
-export AtomicViewpoint, LinkedViewpoint, DerivedViewpoint, apply, delay, retType
+export AtomicViewpoint, LinkedViewpoint, DerivedViewpoint, DelayedViewpoint, ThreadedViewpoint, vp_type, vp_apply, seq_delay, vp_match
 
 using Typeside, Chakra
 
 const Seq = Vector{T} where T<:Chakra.Cobj
 
 head(s::Seq)::Option{Chakra.Cobj} = isempty(s) ? none : s[1]
-tail(s::Seq)::Option{Seq} = isempty(s) ? none : s[2:length(s)]
+tail(s::Seq)::Seq = isempty(s) ? [] : s[2:length(s)]
 
+abstract type Viewpoint{T} end
 
-
-abstract type Viewpoint end
-
-struct AtomicViewpoint <: Viewpoint
+struct AtomicViewpoint{T} <: Viewpoint{T}
+    typ::Type{T}
     att::Symbol
+    AtomicViewpoint(t,a) = typ(a) != t ? error("ERR") : new{t}(t,a)
 end
 
-struct LinkedViewpoint <: Viewpoint
-    elements::Array{Viewpoint}
+struct LinkedViewpoint{T1,T2} <: Viewpoint{Tuple{T1,T2}}
+    fst::Viewpoint{T1}
+    snd::Viewpoint{T2}
 end
 
-struct DerivedViewpoint <: Viewpoint
-    vp::Viewpoint
+struct DerivedViewpoint{T2} <: Viewpoint{T2}
+    typ::Type{T2}
+    vp::Viewpoint{T1} where T1
     fn::Function
+    DerivedViewpoint(t,v,f) = Base.return_types(f)[1] <: t ? new{t}(t,v,f) : error("ERR")
 end
 
-struct DelayedViewpoint <: Viewpoint
-    vp::Viewpoint
+struct DelayedViewpoint{T} <: Viewpoint{T}
+    vp::Viewpoint{T}
     lag::Int64
 end
 
-delay(s::Seq,n::Int64)::Option{Seq} = n == 0 ? s : delay(tail(s),n-1)
-delay(s::Unit,n::Int64)::Option{Seq} = none
+struct ThreadedViewpoint{T} <: Viewpoint{T}
+    test::Viewpoint{Bool}
+    vp::Viewpoint{T}
+end
 
-function retType(v::Viewpoint)::DataType end
+seq_delay(s::Seq,n::Int64)::Option{Seq} = isempty(s) ? none : (n <= 0 ? s : seq_delay(tail(s),n-1))
 
-retType(v::AtomicViewpoint)::DataType = typ(v.att)
-retType(v::LinkedViewpoint)::DataType = Tuple{map(retType,v.elements)...}
-retType(v::DerivedViewpoint) = Base.return_types(v.fn)[1]
+function vp_type(v::Viewpoint)::DataType end
 
-function apply(v::Viewpoint,s::Seq) end
+vp_type(v::AtomicViewpoint)::DataType = typ(v.att)
+vp_type(v::LinkedViewpoint)::DataType = Tuple{vp_type(v.fst),vp_type(v.snd)}
+vp_type(v::DerivedViewpoint)::DataType = Base.return_types(v.fn)[1]
+vp_type(v::DelayedViewpoint)::DataType = vp_type(v.vp)
 
-apply(v::AtomicViewpoint,s::Seq) = getAtt(head(s),v.att)
-apply(v::LinkedViewpoint,s::Seq) = tuple(map(e -> apply(e,s), v.elements)...)
-apply(v::DerivedViewpoint,s::Seq) = (as = apply(v.vp,s); typeof(as)<:Tuple ? v.fn(as...) : v.fn(as))
-apply(v::DelayedViewpoint,s::Seq) = apply(v.vp,delay(s,v.lag))
+function vp_apply(v::T where T<:Viewpoint,s::Seq) end
 
-  
+vp_apply(v::AtomicViewpoint,s::Seq) = op_fish(head, getAtt(v.att))(s)
+vp_apply(v::LinkedViewpoint,s::Seq) = op_bind(vp_apply(v.fst,s), l -> op_bind(vp_apply(v.snd,s), r ->(l,r)))
+vp_apply(v::DerivedViewpoint,s::Seq) = op_bind(vp_apply(v.vp,s), as -> typeof(as)<:Tuple ? v.fn(as...) : op_map(v.fn)(as))
+vp_apply(v::DelayedViewpoint,s::Seq) = op_bind(seq_delay(s,v.lag),s2 -> vp_apply(v.vp,s2))
+
+
+
+vp_map(v::Viewpoint,s::Seq)::Vector = isempty(s) ? [] : (vp_apply(v,s) == none ? vp_map(v,tail(s)) : [vp_apply(v,s),(vp_map(v,tail(s)))...])
+
+
+
+
+
+
+
+
 end
