@@ -1,0 +1,23 @@
+module ContextModels
+
+using Typeside, Chakra, Viewpoints
+
+function construct_model(s::Vector{T} where T<:Chakra.Obj,v::T where T<:Viewpoint,order::Int)
+
+    tau = vp_type(v)
+    db = Dict{Vector{tau},Int}()
+    n = length(s)
+
+    vs = reverse(vp_map(s,v))
+    
+    for h in 1:order+1
+        for i in 1:n-h-1
+            println(s2[i:i+h])
+        end
+    end
+    
+end
+
+
+
+end

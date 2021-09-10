@@ -1,28 +1,28 @@
 module Chakra
 
-export delimit, setAtt, getAtt, particles, emprty, insert, lookup, domain
+export delim, set, get, parts, empty, ins, fnd, dom
 
 using Typeside
 
 abstract type Id end
-abstract type Cobj end
+abstract type Obj end
 abstract type Struc end
 
-function delimit(ps::List{Id})::Cobj
+function delim(ps::Vector{Id})::Obj
     error("No implementation of delim")
 end
 
-function setAtt(o::Cobj,a::Symbol,v)::Cobj
+function set(o::Obj,a::Symbol,v)::Obj
     error("No implementation of setAtt")
 end
 
-function getAtt(o::Cobj,a::Symbol)::Option{Any}
-    error("No implementation of getAtt")
+function get(o::Obj,a::Symbol)::Option{Any}
+    error("No implementation of get")
 end
 
-getAtt(a::Symbol) = o -> getAtt(o,a)
+get(a::Symbol) = o -> get(o,a)
 
-function particles(o::Cobj)::List{Id}
+function parts(o::Obj)::Vector{Id}
     error("No implementation of getParts")
 end
 
@@ -30,15 +30,15 @@ function empty()::Struc
     error("No implementation of emp")
 end
 
-function insert(x::Id,o::Cobj,s::Struc)::Struc
+function ins(x::Id,o::Obj,s::Struc)::Struc
     error("No implementation of ins")
 end
 
-function lookup(x::Id,s::Struc)::Option{Cobj}
+function fnd(x::Id,s::Struc)::Option{Obj}
     error("No implementation of lup")
 end
 
-function domain(s::Struc)::List{Id}
+function dom(s::Struc)::Vector{Id}
     error("No implementation of dom")
 end
 
