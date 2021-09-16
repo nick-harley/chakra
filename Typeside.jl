@@ -1,8 +1,11 @@
 module Typeside
 
-export Option, op_map, op_fish, op_bind, Typ, typ, associatedType
+export hd, tl, Option, op_map, op_fish, op_bind, Typ, typ, associatedType
 
 Option{T} = Union{T,Nothing}
+
+hd(x::Vector)::Option = isempty(x) ? nothing : x[1]
+tl(x::Vector)::Vector = isempty(x) ? [] : x[2:length(x)]
 
 function op_map(f::Function)::Function
     function (x...)

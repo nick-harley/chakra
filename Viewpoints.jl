@@ -6,9 +6,6 @@ using Typeside, Chakra
 
 const Seq = Vector{T} where T<:Chakra.Obj
 
-head(s::Seq)::Option{Chakra.Obj} = isempty(s) ? nothing : s[1]
-tail(s::Seq)::Seq = isempty(s) ? [] : s[2:length(s)]
-
 abstract type Viewpoint{T} end
 
 struct AtomicViewpoint{T} <: Viewpoint{T}
@@ -39,7 +36,7 @@ struct ThreadedViewpoint{T} <: Viewpoint{T}
     vp::Viewpoint{T}
 end
 
-seq_delay(s::Seq,n::Int64)::Option{Seq} = isempty(s) ? nothing : (n <= 0 ? s : seq_delay(tail(s),n-1))
+seq_delay(s::Seq,n::Int64)::Option{Seq} = isempty(s) ? nothing : (n <= 0 ? s : seq_delay(tl(s),n-1))
 
 function vp_type(v::Viewpoint)::DataType end
 
@@ -50,13 +47,13 @@ vp_type(v::DelayedViewpoint)::DataType = vp_type(v.vp)
 
 function vp_apply(v::T where T<:Viewpoint,s::Seq) end
 
-vp_apply(v::AtomicViewpoint,s::Seq) = op_fish(head, Chakra.get(v.att))(s)
+vp_apply(v::AtomicViewpoint,s::Seq) = op_fish(hd, Chakra.get(v.att))(s)
 vp_apply(v::LinkedViewpoint,s::Seq) = op_bind(vp_apply(v.fst,s), l -> op_bind(vp_apply(v.snd,s), r ->(l,r)))
 vp_apply(v::DerivedViewpoint,s::Seq) = op_bind(vp_apply(v.vp,s), as -> typeof(as)<:Tuple ? v.fn(as...) : op_map(v.fn)(as))
 vp_apply(v::DelayedViewpoint,s::Seq) = op_bind(seq_delay(s,v.lag),s2 -> vp_apply(v.vp,s2))
 
 
-vp_map(v::Viewpoint,s::Seq)::Vector = isempty(s) ? [] : (vp_apply(v,s) == nothing ? vp_map(v,tail(s)) : [vp_apply(v,s),(vp_map(v,tail(s)))...])
+vp_map(v::Viewpoint,s::Seq)::Vector = isempty(s) ? [] : (vp_apply(v,s) == nothing ? vp_map(v,tl(s)) : [vp_apply(v,s),(vp_map(v,tl(s)))...])
 
 
 end
