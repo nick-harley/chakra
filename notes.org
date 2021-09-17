@@ -1,0 +1,8 @@
+- change prob to ML
+- more efficient more functional array slicing
+- ml of a sequence using chain rule
+- rename Models n-grams
+- create h-gram models
+- how to blend n-gram models
+- what is perplexity? can i use it to smooth when i dont know rh alphabet? 
+- how to make models of heterogeneous types

@@ -2,72 +2,84 @@ module Models
 
 using Typeside, Chakra, Viewpoints
 
-struct Model{T}
-    order::Int
+struct NGram{T,n}
+    next::T
+    context::Vector{T}
+    NGram{T,n}(nxt::T,ctx::Vector{T}) where {T,n} = length(ctx) != n-1 ? error("Context wrong length.") : new{T,n}(nxt,ctx)
+    NGram{T,n}(s::Vector{T}) where {T,n} = NGram{T,n}(hd(s),tl(s))
+end
+
+tovec(ng::NGram{T,n}) where {T,n} =  [ng.next,ng.context...]
+
+function generate_ngrams(s::Vector{T},n::Int) where T
+
+    ngrams = NGram{T,n}[]
+
+    for i in 1:length(s)-n+1
+        append!(ngrams,[NGram{T,n}(s[i:i+n-1])])
+    end
+
+    return ngrams
+
+end
+
+abstract type Model{T} end
+
+struct NGramModel{T,n} <: Model{T}
     db::Dict{Vector{T},Int}
     elems::Set{T}
+    function NGramModel{T,n}(ngrams::Vector{NGram{T,n}}) where {T,n}
+        db = Dict{Vector{T},Int}()
+        seqs = map(tovec,ngrams)
+        map(s -> haskey(db,s) ? db[s] += 1 : db[s] = 1, seqs)
+        elems = Set(vcat(seqs...))
+        new{T,n}(db,elems)
+    end
+    NGramModel{T,n}(s::Vector{T}) where {T,n} = NGramModel{T,n}(generate_ngrams(s,n))
 end
 
-get_count(c::Model,s::Vector) = haskey(c.db,s) ? c.db[s] : 0
-
-function construct_model(s::Vector{T} where T<:Chakra.Obj,v::T where T<:Viewpoint,order::Int)
-
-    tau = vp_type(v)
-    db = Dict{Vector{tau},Int}()
-
-    vs = vp_map(v,s)
-    n = length(vs)
-
-    db[[]] = n
-    elems = Set(vs)
-    
-    for h in 1:order+1
-        for i in 1:n-h+1
-            seq = vs[i:i+h-1]
-            haskey(db,seq) ? db[seq]+=1 : db[seq] = 1
+struct HGramModel{T,h} <: Model{T}
+    db::Dict{Vector{T},Int}
+    elems::Set{T}
+    function HGramModel{T,h}(s::Vector{T}) where {T,h}
+        db = Dict{Vector{T},Int}()
+        for n in 1:h
+            ngmod = NGramModel{T,n}(s)
+            db = merge(db,ngmod.db)
         end
+        return new{T,h}(db,Set(s))
     end
-    return Model{tau}(order,db,elems)
-
 end
 
-function prob(nxt::T,ctx::Vector{T},m::Model{S}) where {S,T<:S} 
+count(ng::NGram{T,n},m::Model{T}) where {T,n} = ( s = tovec(ng) ; haskey(m.db,s) ? m.db[s] : 0 )
+ctxcount(ng::NGram{T,n},m::Model{T}) where {T,n}= sum(map(e -> count(NGram{T,n}(e,ng.context),m), collect(m.elems)))
 
-    ctx_count = get_count(m,ctx)
+# MAXIMUM LIKELIHOOD
 
-    if ctx_count == 0
-        return 0.0
-    end
-
-    seq_count = get_count(m,[nxt,ctx...])
-
-    return seq_count / ctx_count
-    
+function ml(ng::NGram{T,n},m::Model{T}) where {T,n}
+    seq_count = count(ng,m)
+    ctx_count = ctxcount(ng,m)
+    ctx_count == 0 ? 0.0 : seq_count / ctx_count
 end
 
-prob(nxt::T,m::Model{S}) where {T,S>:T} = prob(nxt,T[],m)
+# LAMBDA
 
-function alpha(nxt::T,ctx::Vector{T},m::Model{S}) where {S,T<:S}
-    seq_count = get_count(m,[nxt,ctx...])
-    ctx_count = get_count(m,ctx) + 1
-    return seq_count / ctx_count
-end
+lambda(ng::NGram{T,n},m::Model{S}) where {S,T<:S,n} = 1 / (ctxcount(ng,m) + 1)
 
-function lambda(ctx::Vector{T},m::Model{S}) where {S,T<:S}
-    return 1 / (get_count(m,ctx) + 1)
-end
+# 
 
-function ppm(nxt::T,ctx::Vector{T},m::Model{S}) where {S,T<:S}
+function ppm(ng::NGram{T,n},m::HGramModel{S,h}) where {S,T<:S,n,h}
 
-    if m.order < length(ctx)
-        ctx = ctx[1:m.order]
+    if h < n
+        error("Cannot predict $n gram from $h gram model.")
     end
     
-    if isempty(ctx)
-        return prob(nxt,m) + 1/(length(m.elems))
+    if n == 1
+        return ml(ng,m) + 1/(length(m.elems))
     end
-    
-    alpha(nxt,ctx,m) + lambda(ctx,m) * ppm(hd(ctx),tl(ctx),m)
+
+    ctx = ng.context
+    return ml(ng,m) + lambda(ng,m) * ppm(NGram{T,n-1}(hd(ctx),tl(ctx)),m)
     
     
 end
