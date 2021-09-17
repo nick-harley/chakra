@@ -78,8 +78,8 @@ function ppm(ng::NGram{T,n},m::HGramModel{S,h}) where {S,T<:S,n,h}
         return ml(ng,m) + 1/(length(m.elems))
     end
 
-    ctx = ng.context
-    return ml(ng,m) + lambda(ng,m) * ppm(NGram{T,n-1}(hd(ctx),tl(ctx)),m)
+    ctx2 = ng.context[1:length(ng.context)-1]
+    return ml(ng,m) + lambda(ng,m) * ppm(NGram{T,n-1}(ng.next,ctx2),m)
     
     
 end
