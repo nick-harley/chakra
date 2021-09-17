@@ -1,43 +1,21 @@
 # Multiple Viewpoint Representation
 
-- Options
+## Chakra
 
-  - Option{T}
-  - some{T}:
-  - none{T}:
-  - omap{T}: (A->B) -> Option{A} -> Option{B}
-  - ojoin{T}: Option{Option{T}} -> Option{T}
-  - oret{T}: T -> Option{T}
-  - obind{T} : Option{A} -> (A->Option{B}) -> Option{B} = x,f -> (omap f . join) x
+- defines the abstract operations of chakra
 
-- Sequences
-  
-  - Sequence
-  
-  - sempt : Sequence
-  - scons : Obj -> Sequence -> Sequence
-  - shead : Sequence -> Option{Obj}
-  - stail : Sequence -> Sequence #should this be partial???
+## ChakraImp
 
-- Viewpoints
-  
-  - Viewpoint{T}
-  
-  - Atomic{T} <: Type{T} -> Symbol -> Viewpoint{T}
-  - Linked{T1,T2} <: Viewpoint{T1} -> Viewpoint{T2} -> Viewpoint{T1xT2}
-  - Derived{T1,T2} <: Viewpoint{T1} -> (T1->T2) -> Viewpoint{T2}
-  - Delayed{T} <: Viewpoint{T} -> Int -> Viewpoint{T}
-  - Threaded{T} <: Viewpoint{T} -> Viewpoint{Bool} -> Viewpoint{T}
-    
-  - vapply{T} : Viewpoint{T} -> Sequence -> T
-  - vtype{T} : Viewpoint{T} -> Type{T}
-  - vmap{T} : Viewpoint{T} -> Sequence -> List{T}
-  - delayseq{T} : Sequence -> Option{Sequence}
+- contains a implementation of the chakra interface
 
-- Context Models
-  
-  - Model{T} 
-  
-  - mempt{T} : Model{T}
-  - madd{T} : Vector{T} -> Model{T} -> Model{T}
-  - 
+## Viewpoint
+
+- defines the type of viewpoints and operations for composing them
+
+## Models
+
+- defines NGram and HGram models and operations for computing probabilities
+
+## Explorer
+
+- basic demonstration of the functionality

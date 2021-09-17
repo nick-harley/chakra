@@ -2,7 +2,7 @@ module Viewpoints
 
 export Viewpoint, AtomicViewpoint, LinkedViewpoint, DerivedViewpoint, DelayedViewpoint, ThreadedViewpoint, vp_type, vp_apply, seq_delay, vp_map
 
-using Typeside, Chakra
+using Chakra
 
 const Seq = Vector{T} where T<:Chakra.Obj
 

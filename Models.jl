@@ -1,6 +1,8 @@
 module Models
 
-using Typeside, Chakra, Viewpoints
+using Chakra, Viewpoints
+export NGram, NGramModel, HGramModel, ml, ppm, ngram
+
 
 struct NGram{T,n}
     next::T
@@ -9,6 +11,7 @@ struct NGram{T,n}
     NGram{T,n}(s::Vector{T}) where {T,n} = NGram{T,n}(hd(s),tl(s))
 end
 
+ngram(s::Vector{T}) where T = isempty(s) ? error("Can't have a 0 gram.") : NGram{T,length(s)}(s)
 tovec(ng::NGram{T,n}) where {T,n} =  [ng.next,ng.context...]
 
 function generate_ngrams(s::Vector{T},n::Int) where T
@@ -62,6 +65,10 @@ function ml(ng::NGram{T,n},m::Model{T}) where {T,n}
     ctx_count == 0 ? 0.0 : seq_count / ctx_count
 end
 
+ml(s::Vector{T},m::Model{T}) where T = ml(ngram(s),m)
+ml(nxt::T,m::Model{T}) where T = ml(ngram([nxt]),m)
+ml(nxt::T,ctx::Vector{T},m::Model{T}) where T = ml(ngram([nxt,ctx...]),m)
+
 # LAMBDA
 
 lambda(ng::NGram{T,n},m::Model{S}) where {S,T<:S,n} = 1 / (ctxcount(ng,m) + 1)
@@ -83,6 +90,10 @@ function ppm(ng::NGram{T,n},m::HGramModel{S,h}) where {S,T<:S,n,h}
     
     
 end
+
+ppm(nxt::T,m::HGramModel{T,h}) where {T,h} = ppm(ngram([nxt]),m)
+ppm(nxt::T,ctx::Vector{T},m::HGramModel{T,h}) where {T,h} = ppm(ngram([nxt,ctx...]),m)
+ppm(s::Vector{T},m::HGramModel{T,h}) where {T,h} = ppm(ngram(s),m)
 
 end
 

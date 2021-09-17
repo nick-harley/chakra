@@ -2,7 +2,7 @@ module PitchADT
 
 export Pitch, PitchInterval, diff, shift
 
-using Typeside
+using Chakra
 
 abstract type Pitch end
 abstract type PitchInterval end

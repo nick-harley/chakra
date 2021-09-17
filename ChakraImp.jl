@@ -1,6 +1,5 @@
 module ChakraImp
 
-using Typeside
 using Chakra
 import Chakra: delim, set, get, parts, empty, fnd, ins, dom
 
