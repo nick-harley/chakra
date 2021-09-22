@@ -1,6 +1,6 @@
 module Chakra
 
-export hd, tl, Option, op_map, op_fish, op_bind, Typ, typ, associatedType, delim, set, get, parts, empty, ins, fnd, dom
+export hd, tl, Option, op_map, op_fish, op_bind, typ, associatedType, delim, set, get, parts, empty, ins, fnd, dom
 
 hd(x::Vector)::Option = isempty(x) ? nothing : x[1]
 tl(x::Vector)::Vector = isempty(x) ? [] : x[2:length(x)]
@@ -15,19 +15,18 @@ end
 
 op_bind(x,f) = x == nothing ? nothing : f(x)
 op_fish(f,g) = x -> op_bind(f(x),y-> g(y))
-    
-function Typ(::Val{n} where n)
-    println("There no associated type found")
-    return Any
-end
 
-function typ(n::Symbol)
-    Typ(Val{n}())
-end
+
+
+typ(::Val{n}) where n = (println("There no associated type found") ; Any )
+typ(n::Symbol) = typ(Val{n}())
 
 macro associatedType(n,T)
-    esc(:(Chakra.Typ(::Val{$n}) = $T))
+    esc(:(Chakra.typ(::Val{$n}) = $T))
 end
+
+
+
 
 abstract type Id end
 abstract type Obj end

@@ -10,7 +10,7 @@ abstract type PitchInterval end
 function diff(p1::Pitch,p2::Pitch)::PitchInterval end
 function shift(i::PitchInterval,p::Pitch)::Pitch end
 
-Typeside.@associatedType(:pitch,Pitch)
-Typeside.@associatedType(:pint,PitchInterval)
+Chakra.@associatedType(:pitch,Pitch)
+Chakra.@associatedType(:pint,PitchInterval)
 
 end
