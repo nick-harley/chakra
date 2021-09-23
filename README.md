@@ -1,21 +1,32 @@
 # Multiple Viewpoint Representation
 
-## Chakra
+## Chakra:
 
-- defines the abstract operations of chakra
+defines the abstract operations of chakra
+- Id, Obj, Struc
+- delim, get, set, parts
+- empty, ins, fnd, dom
 
-## ChakraImp
+## ChakraImp:
 
-- contains a implementation of the chakra interface
+an implementation of the chakra interface
+- Id, Obj, Struc
+- delim, get, set, parts
+- empty, ins, fnd, dom
 
-## Viewpoint
+## Viewpoints:
 
-- defines the type of viewpoints and operations for composing them
+defines the type of viewpoints and operations for composing them
+- AtomicViewpoint, LinkedViewpoint, DerivedViewpoint, DelayedViewpoint
+- vp_map (matching function)
 
-## Models
+## Models:
 
-- defines NGram and HGram models and operations for computing probabilities
+defines the types of models and distributions and operations for computing probabilities
+- NGram, NGramModel, HGramModel, Predictor, Distribution
+- Smoothing, Escape
+- information_content, entropy, entropy_max
 
-## Explorer
+## Explorer:
 
-- basic demonstration of the functionality
+basic demonstration of the functionality

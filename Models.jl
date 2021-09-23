@@ -1,9 +1,9 @@
 module Models
 
 using Chakra, Viewpoints
-export NGram, NGramModel, HGramModel, Predictor, Distribution, ml, ppm, ngram, information_content, entropy, Backoff, Interpolated, A, B, C, D, AX 
+export NGram, NGramModel, HGramModel, Predictor, Distribution, ml, ppm, ngram, information_content, entropy, entropy_max, redundancy, Backoff, Interpolated, A, B, C, D, AX 
 
-
+# Type of NGrams
 struct NGram{T,n}
     next::T
     context::Vector{T}
@@ -11,10 +11,13 @@ struct NGram{T,n}
     NGram{T,n}(s::Vector{T}) where {T,n} = NGram{T,n}(hd(s),tl(s))
 end
 
+# Construct an NGram from a sequence
 ngram(s::Vector{T}) where T = isempty(s) ? error("Can't have a 0 gram.") : NGram{T,length(s)}(s)
+# Construct a sequence fron an NGram
 tovec(ng::NGram{T,n}) where {T,n} =  [ng.next,ng.context...]
 
-function generate_ngrams(s::Vector{T},n::Int) where T
+# Generate NGrams from a sequence
+function generate_ngrams(s::Vector{T},n::Int)::Vector{NGram{T,n}} where T
 
     ngrams = NGram{T,n}[]
     order = n-1
@@ -27,9 +30,11 @@ function generate_ngrams(s::Vector{T},n::Int) where T
 
 end
 
-abstract type Model{T} end
+# Abstract type of models
+abstract type Model{T,n} end
 
-struct NGramModel{T,n} <: Model{T}
+# Type of n-gram models of type T
+struct NGramModel{T,n} <: Model{T,n}
     db::Dict{Vector{T},Int}
     elems::Set{T}
     function NGramModel{T,n}(ngrams::Vector{NGram{T,n}}) where {T,n}
@@ -42,7 +47,8 @@ struct NGramModel{T,n} <: Model{T}
     NGramModel{T,n}(s::Vector{T}) where {T,n} = NGramModel{T,n}(generate_ngrams(s,n))
 end
 
-struct HGramModel{T,h} <: Model{T}
+# Type of HGram models
+struct HGramModel{T,h} <: Model{T,h}
     db::Dict{Vector{T},Int}
     elems::Set{T}
     function HGramModel{T,h}(s::Vector{T}) where {T,h}
@@ -56,7 +62,8 @@ struct HGramModel{T,h} <: Model{T}
 end
 
 # Number of occurences of g in m plus k
-count(g::NGram,m::Model,k::Number=0) = ( c = Base.get(m.db,tovec(g),0) ; c == 0 ? 0 : c+k )
+count(g::NGram{T,n},m::NGramModel{T,n},k::Number=0) where {T,n} = (c=Base.get(m.db,tovec(g),0); c>0 ? c+k : 0)
+count(g::NGram{T,n},m::HGramModel{T,h},k::Number=0) where {T,n,h} = n<=h ? (c=Base.get(m.db,tovec(g),0); c>0 ? c+k : 0) : error("$h gram model does not include $n grams.")
 
 # Number of unique symbols in sequence s
 tcount(s::Vector{T}) where T = length(Set(s))
@@ -64,85 +71,92 @@ tcount(s::Vector{T}) where T = length(Set(s))
 # Number of occurrences of e in s
 tcount(s::Vector{T},e::T) where T = Base.count(i->i==e,s)
 
-# Sum over a the occurrences of (a,g.context) in m plus k
-sumcount(g::NGram{T,n},m::Model{T},a::Set{T},k::Number=0) where {T,n} = sum(map(e->count(ngram([e,g.context...]),m,k),collect(a)))
+# Sum over e in a of count(e|g.context)+k
+sumcount(g::NGram{T},m::Model{T},a::Set{T},k::Number=0) where T = sum(map(e->count(ngram([e,g.context...]),m,k),collect(a)))
 
-# The symbols in s which occur exactly n times
+# Symbols in s which occur exactly n times in s
 occ(s::Vector{T},n::Int) where T = tcount(s[findall(x->x==n,map(x->tcount(s,x),s))])
 
-# MAXIMUM LIKELIHOOD
-
-function ml(g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n}
-    ctx_count = sumcount(g,m,a)
-    ctx_count == 0 ? 0.0 : count(g,m) / ctx_count
+# Maximum Likelihood
+function ml(g::NGram{T},m::Model{T},a::Set{T},k::Number=0) where T
+    ctx_count = sumcount(g,m,a,k)
+    ctx_count == 0 ? 0.0 : count(g,m,k) / ctx_count
 end
 
 ml(nxt::T,ctx::Vector{T},m::Model{T},a::Set{T}) where T = ml(ngram([nxt,ctx...]),m,a)
 ml(nxt::T,m::Model{T},a::Set{T}) where T = ml(ngram([nxt]),m,a)
 
 
-# SMOOTHING
-
+# Abstract type of smoothing escape methods
 abstract type Escape end
 
+# Concrete types for smoothing escape methods
 struct A <: Escape end
 struct B <: Escape end
 struct C <: Escape end
 struct D <: Escape end
 struct AX <: Escape end
 
+# Abstract type of smoothing method
 abstract type Smoothing end
 
+# Concrete types of smoothing methods
 struct Interpolated <: Smoothing end
 struct Backoff <: Smoothing end
 
 
 # ALPHA AND LAMBDA
+function alpha(smth::Smoothing,esc::Escape,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} end 
+function lambda(smth::Smoothing,esc::Escape,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} end
 
 ## Backoff Smoothing
 
-lambda(::Backoff,::A,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = 1 / sumcount(g,m,a,1)
-alpha(::Backoff,::A,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = count(g,m,0) / sumcount(g,m,a,1)
+lambda(::Backoff,::A,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = 1 / (sumcount(g,m,a)+length(a))
+alpha(::Backoff,::A,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = count(g,m,0) / (sumcount(g,m,a)+length(a))
 
-lambda(::Backoff,::B,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = tcount(g.context)/sumcount(g,m,a)
-alpha(::Backoff,::B,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = count(g,m,-1)/sumcount(g,m,a)
+lambda(::Backoff,::B,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = tcount(g.context)/sumcount(g,m,a)
+alpha(::Backoff,::B,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = (count(g,m)-1)/sumcount(g,m,a)
 
-lambda(::Backoff,::C,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = (t=tcount(g.context); t/sumcount(g,m,a,t))
-alpha(::Backoff,::C,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = count(g,m) / sumcount(g,m,a,tcount(g.context))
+lambda(::Backoff,::C,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = (t=tcount(g.context);t/(sumcount(g,m,a)+length(a)*t))
+alpha(::Backoff,::C,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = count(g,m)/(sumcount(g,m,a)+(length(a)*tcount(g.context)))
 
-lambda(::Backoff,::D,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = 0.5*tcount(g.context) / sumcount(g,m,a)
-alpha(::Backoff,::D,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = count(g,m,-0.5) / sumcount(g,m,a)
-                                                   
-lambda(::Backoff,::AX,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = (t=occ(g.context,1)+1; t/(sumcount(g,m,a,t+1)))
-alpha(::Backoff,::AX,g::NGram{T,n},m::Model{T},a::Set{T}) where {T,n} = count(g,m)/(sumcount(g,m,a,occ(g.context,1)+1))
+lambda(::Backoff,::D,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = (0.5*tcount(g.context))/sumcount(g,m,a)
+alpha(::Backoff,::D,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = (count(g,m)-0.5)/sumcount(g,m,a)
+
+lambda(::Backoff,::AX,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = (t=occ(g.context,1)+1; t/(sumcount(g,m,a)+(length(a)*t)))
+alpha(::Backoff,::AX,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = (t=occ(g.context,1)+1;count(g,m)/(sumcount(g,m,a)+(length(a)*t)))
 
 ## Interpolated Smoothing
 
-lambda(smth::Interpolated,esc::A,g,m,a) = sumcount(g,m,a,0.0) / (sumcount(g,m,a,0.0)+1)
-alpha(smth::Interpolated,esc::A,g,m,a) = lambda(smth,esc,g,m,a)*(count(g,m,0.0)/sumcount(g,m,a,0.0))
+lambda(smth::Interpolated,esc::A,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = sumcount(g,m,a) / (sumcount(g,m,a)+1)
+alpha(smth::Interpolated,esc::A,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = lambda(smth,esc,g,m,a)*ml(g,m,a)
 
-lambda(smth::Interpolated,esc::B,g,m,a) = sumcount(g,m,a,-1.0) / (sumcount(g,m,a,-1.0)+tcount(g.context))
-alpha(smth::Interpolated,esc::B,g,m,a) = lambda(smth,esc,g,m,a)*(count(g,m,-1.0)/sumcount(g,m,a,-1.0))
-                                                                 
-lambda(smth::Interpolated,esc::C,g,m,a) = sumcount(g,m,a,0.0) / (sumcount(g,m,a,0.0)+tcount(g.context))
-alpha(smth::Interpolated,esc::C,g,m,a) = lambda(smth,esc,g,m,a)*(count(g,m,0.0)/sumcount(g,m,a,0.0))
+lambda(smth::Interpolated,esc::B,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = sumcount(g,m,a,-1.0) / (sumcount(g,m,a,-1.0)+tcount(g.context))
+alpha(smth::Interpolated,esc::B,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = lambda(smth,esc,g,m,a)*ml(g,m,a,-1)
 
-lambda(smth::Interpolated,esc::D,g,m,a) = sumcount(g,m,a,-0.5) / (sumcount(g,m,a,-0.5)+(tcount(g.context)/2))
-alpha(smth::Interpolated,esc::D,g,m,a) = lambda(smth,esc,g,m,a)*(count(g,m,-0.5)/sumcount(g,m,a,-0.5))
-                                                                 
-lambda(smth::Interpolated,esc::AX,g,m,a) = sumcount(g,m,a) / (sumcount(g,m,a)+occ(g.context,1))
-alpha(smth::Interpolated,esc::AX,g,m,a) = lambda(smth,esc,g,m,a)*(count(g,m,0.0)/sumcount(g,m,a,0.0))
+lambda(smth::Interpolated,esc::C,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = sumcount(g,m,a,0.0) / (sumcount(g,m,a,0.0)+tcount(g.context))
+alpha(smth::Interpolated,esc::C,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = lambda(smth,esc,g,m,a)*ml(g,m,a,0.0)
+
+lambda(smth::Interpolated,esc::D,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = sumcount(g,m,a,-0.5) / (sumcount(g,m,a,-0.5)+(tcount(g.context)/2))
+alpha(smth::Interpolated,esc::D,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = lambda(smth,esc,g,m,a)*ml(g,m,a,-0.5)
+
+lambda(smth::Interpolated,esc::AX,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = sumcount(g,m,a) / (sumcount(g,m,a)+occ(g.context,1))
+alpha(smth::Interpolated,esc::AX,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h} = lambda(smth,esc,g,m,a)*ml(g,m,a)
 
 # BACKOFF PPM
-                                                           
-function ppm(smth::Backoff,esc::Escape,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h}
 
+function ppm(smth::Backoff,esc::Escape,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h}
+    order = n-1
+    if n>h
+        error("Cannot predict $n gram from $h gram model.")
+    end
+    
     if count(g,m) == 0
-        if n == 1
+        if order == 0
             return 1/length(a)
         else
-            g2 = NGram{T,n-1}(g.next,g.context[1:length(g.context)-1])
-            return lambda(smth,esc,g,m,a)*ppm(smth,esc,g2,m,a,esc)
+            g2 = NGram{T,order}(g.next,g.context[1:order-1])
+            return lambda(smth,esc,g,m,a)*ppm(smth,esc,g2,m,a)
         end
     end
 
@@ -150,32 +164,31 @@ function ppm(smth::Backoff,esc::Escape,g::NGram{T,n},m::HGramModel{T,h},a::Set{T
     
 end
 
-ppm(smth::Backoff,esc::Escape,nxt::T,ctx::Vector{T},m::HGramModel{T,h},a::Set{T}) where {T,h} = ppm(smth,esc,ngram([nxt,ctx...]),m,a)
-ppm(smth::Backoff,esc::Escape,nxt::T,m::HGramModel{T,h},a::Set) where {T,h} = ppm(smth,esc,ngram([nxt]),m,a)
-
 # INTERPOLATED PPM
 
 function ppm(smth::Interpolated,esc::Escape,g::NGram{T,n},m::HGramModel{T,h},a::Set{T}) where {T,n,h}
-    if n==1
+    order = n-1
+    if n>h
+        error("Cannot predict $n gram from $h gram model.")
+    end
+
+    if order==0
         return 1 / (length(a) + 1 + tcount(T[]))
     end
 
     lam = lambda(smth,esc,g,m,a)
     gam = 1 - lam
-    g2 = NGram{T,n-1}(g.next,g.context[1:length(g.context)-1])
-    
-    return alpha(smth,esc,g,m,a) + (gam * ppm(smth,esc,g2,m,a))
-    
+    g2 = NGram{T,order}(g.next,g.context[1:order-1])
+    return alpha(smth,esc,g,m,a) + (gam * ppm(smth,esc,g2,m,a))    
 end
 
-ppm(smth::Interpolated,esc::Escape,nxt::T,ctx::Vector{T},m::Model{T},a::Set{T}) where T = ppm(smth,esc,ngram([nxt,ctx...]),m,a)
-
-ppm(smth::Interpolated,esc::Escape,nxt::T,m::Model{T},a::Set{T}) where T = ppm(smth,esc,ngram([nxt]),m,a)
+ppm(smth::Smoothing,esc::Escape,nxt::T,ctx::Vector{T},m::HGramModel{T,h},a::Set{T}) where {T,h} = ppm(smth,esc,ngram([nxt,ctx...]),m,a)
+ppm(smth::Smoothing,esc::Escape,nxt::T,m::HGramModel{T,h},a::Set) where {T,h} = ppm(smth,esc,ngram([nxt]),m,a)
 
 struct Predictor{T}
     smoothing::Smoothing
     escape::Escape
-    model::Model{T}
+    model::Model{T,n} where n
     alphabet::Set{T}
 end
 
@@ -194,6 +207,9 @@ information_content(g::NGram{T,n},p::Predictor{T}) where {T,n} = information_con
 entropy(d::Distribution{T}) where T = sum(map(e->d(e)*information_content(e,d),collect(d.predictor.alphabet)))
 entropy(s::Vector{T},p::Predictor{T}) where T = entropy(Distribution(p,s))
 
+entropy_max(d::Distribution{T}) where T = log(2,length(d.predictor.alphabet))
+
+redundancy(d::Distribution{T}) where T = 1 - (entropy(d)/entropy_max(d))
 
 end
 
