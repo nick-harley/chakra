@@ -1,6 +1,6 @@
 module Viewpoints
 
-export Viewpoint, AtomicViewpoint, LinkedViewpoint, DerivedViewpoint, DelayedViewpoint, ThreadedViewpoint, vp_type, vp_apply, seq_delay, vp_map
+export Viewpoint, AtomicViewpoint, LinkedViewpoint, DerivedViewpoint, DelayedViewpoint, ThreadedViewpoint, vp_type, seq_delay, vp_map
 
 using Chakra
 
@@ -9,9 +9,9 @@ const Seq = Vector{T} where T<:Chakra.Obj
 abstract type Viewpoint{T} end
 
 struct AtomicViewpoint{T} <: Viewpoint{T}
-    typ::Type{T}
+    typ::Type{S} where {S<:T}
     att::Symbol
-    AtomicViewpoint(t,a) = typ(a) != t ? error("ERR") : new{t}(t,a)
+    AtomicViewpoint(t,a::Symbol) = t <: typ(a) ? new{typ(a)}(t,a) : error("Incorrect viewpoint type.")
 end
 
 struct LinkedViewpoint{T1,T2} <: Viewpoint{Tuple{T1,T2}}
@@ -45,15 +45,14 @@ vp_type(v::LinkedViewpoint)::DataType = Tuple{vp_type(v.fst),vp_type(v.snd)}
 vp_type(v::DerivedViewpoint)::DataType = Base.return_types(v.fn)[1]
 vp_type(v::DelayedViewpoint)::DataType = vp_type(v.vp)
 
-function vp_apply(v::T where T<:Viewpoint,s::Seq) end
 
-vp_apply(v::AtomicViewpoint,s::Seq) = op_fish(hd, Chakra.get(v.att))(s)
-vp_apply(v::LinkedViewpoint,s::Seq) = op_bind(vp_apply(v.fst,s), l -> op_bind(vp_apply(v.snd,s), r ->(l,r)))
-vp_apply(v::DerivedViewpoint,s::Seq) = op_bind(vp_apply(v.vp,s), as -> typeof(as)<:Tuple ? v.fn(as...) : op_map(v.fn)(as))
-vp_apply(v::DelayedViewpoint,s::Seq) = op_bind(seq_delay(s,v.lag),s2 -> vp_apply(v.vp,s2))
+(v::AtomicViewpoint)(s::Seq) = op_fish(hd, Chakra.get(v.att))(s)
+(v::LinkedViewpoint)(s::Seq) = op_bind(v.fst(s), l -> op_bind(v.snd(s), r ->(l,r)))
+(v::DerivedViewpoint)(s::Seq) = op_bind(v.vp(s), as -> typeof(as)<:Tuple ? v.fn(as...) : op_map(v.fn)(as))
+(v::DelayedViewpoint)(s::Seq) = op_bind(seq_delay(s,v.lag),s2 -> v.vp(s2))
 
 
-vp_map(v::Viewpoint,s::Seq)::Vector = isempty(s) ? [] : (vp_apply(v,s) == nothing ? vp_map(v,tl(s)) : [vp_apply(v,s),(vp_map(v,tl(s)))...])
+vp_map(v::Viewpoint,s::Seq)::Vector = isempty(s) ? [] : v(s) == nothing ? vp_map(v,tl(s)) : [v(s),vp_map(v,tl(s))...]
 
 
 end

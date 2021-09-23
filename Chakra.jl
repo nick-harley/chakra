@@ -36,11 +36,11 @@ function delim(ps::Vector{Id})::Obj
     error("No implementation of delim")
 end
 
-function set(o::Obj,a::Symbol,v)::Obj
+function set(o::Obj,a::Symbol,v::Any)::Obj
     error("No implementation of setAtt")
 end
 
-function get(o::Obj,a::Symbol)::Option{Any}
+function get(o::Obj,a::Symbol)
     error("No implementation of get")
 end
 
