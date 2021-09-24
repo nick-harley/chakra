@@ -16,6 +16,7 @@ tovec(ng::NGram{T,n}) where {T,n} =  [ng.next,ng.context...]
 
 # Generate NGrams from a sequence
 generate_ngrams(s::Vector{T},n::Int) where T = map(i->NGram(s[i:i+n-1]),1:length(s)-n)
+generate_hgrams(s::Vector{T},h::Int) where T = vcat(map(n->map(i->NGram(s[i:i+n-1]),1:length(s)-n),1:h)...)
 
 # Abstract type of models
 abstract type Model{T,n} end
@@ -24,28 +25,28 @@ abstract type Model{T,n} end
 struct NGramModel{T,n} <: Model{T,n}
     db::Dict{Vector{T},Int}
     elems::Set{T}
-    function NGramModel{T,n}(ngrams::Vector{NGram{T,n}}) where {T,n}
+    function NGramModel(s::Vector{T},n::Int) where T
         db = Dict{Vector{T},Int}()
-        seqs = map(tovec,ngrams)
-        map(s -> haskey(db,s) ? db[s] += 1 : db[s] = 1, seqs)
-        elems = Set(vcat(seqs...))
-        new{T,n}(db,elems)
+        ngrams = map(tovec,generate_ngrams(s,n))
+        map(g -> haskey(db,g) ? db[g] += 1 : db[g] = 1, seqs)
+        elems = Set(s)
+        return new{T,n}(db,elems)
     end
-    NGramModel{T,n}(s::Vector{T}) where {T,n} = NGramModel{T,n}(generate_ngrams(s,n))
+    NGramModel(ss::Vector{Vector{T}},n::Int) where T = NGramModel(vcat(map(s->generate_ngrams(s,n),ss)...))
 end
 
 # Type of HGram models
 struct HGramModel{T,h} <: Model{T,h}
     db::Dict{Vector{T},Int}
     elems::Set{T}
-    function HGramModel{T,h}(s::Vector{T}) where {T,h}
+    function HGramModel(s::Vector{T},h::Int) where T
         db = Dict{Vector{T},Int}()
-        for n in 1:h
-            ngmod = NGramModel{T,n}(s)
-            db = merge(db,ngmod.db)
-        end
+        hgrams = map(tovec,generate_hgrams(s,h))
+        map(g->haskey(db,g) ? db[g] += 1 : db[g] = 1, hgrams)
+        elems = Set(s)
         return new{T,h}(db,Set(s))
     end
+    HGramModel(ss::Vector{Vector{T}},n::Int) where T = HGramModel(vcat(map(s->generate_hgrams(s,n),ss)...))
 end
 
 # Number of occurences of g in m plus k
@@ -173,6 +174,10 @@ end
 
 ppm(smth::Smoothing,esc::Escape,nxt::T,ctx::Vector{T},m::HGramModel{T,h},a::Set{T}) where {T,h} = ppm(smth,esc,NGram(nxt,ctx),m,a)
 ppm(smth::Smoothing,esc::Escape,nxt::T,m::HGramModel{T,h},a::Set) where {T,h} = ppm(smth,esc,NGram(nxt),m,a)
+
+
+
+# PREDICTOR
 
 abstract type Predictor{T} end
 

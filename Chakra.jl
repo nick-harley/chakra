@@ -18,7 +18,7 @@ op_fish(f,g) = x -> op_bind(f(x),y-> g(y))
 
 
 
-typ(::Val{n}) where n = (println("There no associated type found") ; Any )
+typ(::Val{n}) where n = error("There is no associated type found")
 typ(n::Symbol) = typ(Val{n}())
 
 macro associatedType(n,T)
