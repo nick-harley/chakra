@@ -12,7 +12,10 @@ struct NGram{T,n}
     NGram(s::Vector{T}) where T = isempty(s) ? error("Cannot construct 0-gram.") : NGram(hd(s),tl(s))
 end
 
+order(g::NGram{T,n}) where {T,n} = n
 tovec(ng::NGram{T,n}) where {T,n} =  [ng.next,ng.context...]
+trim(g::NGram{T,n},l::Int) where {T,n} = n<=l ? g : NGram(tovec(g)[1:l])
+
 
 # Generate NGrams from a sequence
 generate_ngrams(s::Vector{T},n::Int) where T = map(i->NGram(s[i:i+n-1]),1:length(s)-n)
@@ -25,6 +28,11 @@ abstract type Model{T,n} end
 struct NGramModel{T,n} <: Model{T,n}
     db::Dict{Vector{T},Int}
     elems::Set{T}
+    function NGramModel(gs::Vector{NGram{T,n}}) where {T,n}
+        db = Dict{Vector{T},Int}()
+        map(g->haskey(db,g) ? db[g] += 1 : db[g] = 1,tovec.(gs))
+        return new{T,n}(db,Set(vcat(tovec.(gs)...)))
+    end
     function NGramModel(s::Vector{T},n::Int) where T
         db = Dict{Vector{T},Int}()
         ngrams = map(tovec,generate_ngrams(s,n))
@@ -39,6 +47,12 @@ end
 struct HGramModel{T,h} <: Model{T,h}
     db::Dict{Vector{T},Int}
     elems::Set{T}
+    function HGramModel(gs::Vector{NGram{T}}) where T
+        h = max(order.(gs))
+        db = Dict{Vector{T},Int}()
+        map(g->haskey(db,g) ? db[g] += 1 : db[g] = 1,tovec.(gs))
+        return new{T,h}(db,Set(vcat(tovec.(gs)...)))
+    end
     function HGramModel(s::Vector{T},h::Int) where T
         db = Dict{Vector{T},Int}()
         hgrams = map(tovec,generate_hgrams(s,h))
@@ -48,6 +62,30 @@ struct HGramModel{T,h} <: Model{T,h}
     end
     HGramModel(ss::Vector{Vector{T}},n::Int) where T = HGramModel(vcat(map(s->generate_hgrams(s,n),ss)...))
 end
+
+struct UHGramModel{T,h} <: Model{T,h}
+    db::Dict{Vector{T},Int}
+    elems::Set{T}
+    function UHGramModel(gs::Vector{NGram{T}}) where T
+        h = max(order.(gs))
+        db = Dict{Vector{T},Int}()
+        map(g->haskey(db,g) ? db[g] += 1 : db[g] = 1,tovec.(gs))
+        return new{T,h}(db,Set(vcat(tovec.(gs)...)))
+    end 
+    function UHGramModel(s::Vector{T}) where T
+        db = Dict{Vector{T},Int}()
+        hgrams = map(tovec,generate_hgrams(s,length(s)))
+        map(g->haskey(db,g) ? db[g] += 1 : db[g] = 1, hgrams)
+        elems = Set(s)
+        return new{T,length(s)}(db,Set(s))
+    end
+    function UHGramModel(ss::Vector{Vector{T}}) where T
+        h = max(length.(ss))
+        UHGramModel(vcat(map(s->generate_hgrams(s,length(s)),ss)...))
+    end
+end
+
+order(::Model{T,n}) where {T,n} = n
 
 # Number of occurences of g in m plus k
 count(g::NGram{T,n},m::NGramModel{T,n},k::Number=0) where {T,n} = (c=Base.get(m.db,tovec(g),0); c>0 ? c+k : 0)
@@ -143,7 +181,7 @@ function ppm(smth::Backoff,esc::Escape,g::NGram{T,n},m::HGramModel{T,h},a::Set{T
     end
     
     if order == 0
-        return 1/length(a)
+        return 1/(length(a)+1-tcount(T[],m))
     end
 
     g2 = NGram(g.next,g.context[1:order-1])
@@ -163,18 +201,39 @@ function ppm(smth::Interpolated,esc::Escape,g::NGram{T,n},m::HGramModel{T,h},a::
     end
 
     if order==0
-        return 1 / (length(a) + 1 + tcount(T[],m))
+        return 1 / (length(a) + 1 - tcount(T[],m))
     end
 
     gam = gamma(smth,esc,g,m,a)
-    lam = 1 - gam
     g2 = NGram(g.next,g.context[1:order-1])
     return alpha(smth,esc,g,m,a) + (gam * ppm(smth,esc,g2,m,a))    
 end
 
+
+    
 ppm(smth::Smoothing,esc::Escape,nxt::T,ctx::Vector{T},m::HGramModel{T,h},a::Set{T}) where {T,h} = ppm(smth,esc,NGram(nxt,ctx),m,a)
 ppm(smth::Smoothing,esc::Escape,nxt::T,m::HGramModel{T,h},a::Set) where {T,h} = ppm(smth,esc,NGram(nxt),m,a)
 
+function ppm_seq(smth::Smoothing,esc::Escape,s::Vector{T},m::HGramModel{T,h},a::Set{T}) where {T,h}
+    ngrams = map(i->trim(NGram(s[i:length(s)]),h),1:length(s))
+    predictions = map(g->ppm(smth,esc,g,m,a),ngrams)
+    return prod(predictions)
+end
+
+
+
+function ppm_star(smth::Interpolated,esc::Escape,g::NGram{T},m::HGramModel{T},a::Set{T}) where T
+    n = order(m)
+    gs = map(i->trim(g,i),1:n)
+    ctxs = map(g->g.context,gs)
+    is = findall(map(ctx->deterministic(ctx,m),ctxs))
+    if !isempty(is)
+        smallest_deterministic_context = gs[is[1]]
+        return ppm(smth,esc,smallest_deterministic_context,m,a)
+    end
+    largest_matching_context = gs[last(findall(x->x>0,map(i->tcount(ctxs[i],m),1:n)))]
+    return ppm(smth,esc,largest_matching_context,m,a)
+end
 
 
 # PREDICTOR
@@ -209,7 +268,8 @@ function (p::CombinedPredictor{T})(g::NGram{T,n}) where {T,n}
 end
 
 function (d::Distribution{T})(x::T) where T
-    d.predictor(NGram(x,d.context))
+    g = trim(NGram(x,d.context),order(d.predictor.model))
+    d.predictor(g)
 end
 
 alphabet(p::AtomicPredictor{T}) where T = p.alphabet
@@ -219,6 +279,13 @@ alphabet(d::Distribution{T}) where T = alphabet(d.predictor)
 information_content(g::NGram{T,n},p::Predictor{T}) where {T,n} = -log(2,p(g))
 information_content(p::Predictor{T}) where T = (g::NGram{T,n} where n) -> information_content(g,p)
 information_content(nxt::T,d::Distribution{T}) where T = information_content(NGram(nxt,d.context),d.predictor)
+
+function mean_information_content(s::Vector{T},p::Predictor{T}) where T
+    h = order(p.model)
+    ngrams = map(i->trim(NGram(s[i:length(s)]),h),1:length(s))
+    ics = map(g->ppm(p.smoothing,p.escape,g,p.model,p.alphabet),ngrams)
+    return sum(ics)/length(s)
+end
 
 function entropy(ctx::Vector{T},p::Predictor{T}) where {T}
     ngrams = map(e->NGram(e,ctx),collect(alphabet(p)))
