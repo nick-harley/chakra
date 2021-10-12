@@ -25,12 +25,19 @@ macro associatedType(n,T)
     esc(:(Chakra.typ(::Val{$n}) = $T))
 end
 
+struct ID end
+struct OBJ end
+struct Struct end
 
-
+type(::Type{ID}) = "Set"
 
 abstract type Id end
 abstract type Obj end
 abstract type Struc end
+
+type(::T) where T<:Id = ID()
+type(::T) where T<:Obj = OBJ()
+type(::T) where T<:Struc = STRUC()
 
 function delim(ps::Vector{Id})::Obj
     error("No implementation of delim")
@@ -40,11 +47,13 @@ function set(o::Obj,a::Symbol,v::Any)::Obj
     error("No implementation of setAtt")
 end
 
+set(a::Symbol) = (o::Obj,v::Any) -> set(o,a,v)
+
 function get(o::Obj,a::Symbol)
     error("No implementation of get")
 end
 
-get(a::Symbol) = o -> get(o,a)
+get(a::Symbol) = (o::Obj)::typ(a) -> get(o,a)
 
 function parts(o::Obj)::Vector{Id}
     error("No implementation of getParts")

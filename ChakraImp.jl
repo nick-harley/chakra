@@ -9,18 +9,18 @@ end
 
 struct Obj <: Chakra.Obj
     particles::Vector{Id}
-    attributes::Dict{Symbol,Any}
+    attributes::Base.ImmutableDict{Symbol,Any}
 end
 
 struct Struc <: Chakra.Struc
     constituents::Dict{Id,Obj}
 end
 
-delim(ps::Vector{Id})::Obj = Obj(ps,Dict{Symbol,Any}())
+delim(ps::Vector{Id})::Obj = Obj(ps,Base.ImmutableDict{Symbol,Any}())
 
 delim()::Obj = delim(Id[])
 
-set(o::Obj,a::Symbol,v)::Obj = Obj(o.particles,Dict([pairs(o.attributes)...,(a,v)]))
+set(o::Obj,a::Symbol,v)::Obj = Obj(o.particles,Base.ImmutableDict(o.attributes,a=>v))
 
 get(o::Obj,a::Symbol)::Option{Any} = Base.get(o.attributes,a,nothing)
 
