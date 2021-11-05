@@ -53,7 +53,7 @@ function get(o::Obj,a::Symbol)
     error("No implementation of get")
 end
 
-get(a::Symbol) = (o::Obj)::typ(a) -> get(o,a)
+get(a::Symbol) = (o::Obj) -> get(o,a)
 
 function parts(o::Obj)::Vector{Id}
     error("No implementation of getParts")
