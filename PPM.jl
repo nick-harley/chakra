@@ -37,7 +37,6 @@ function trim(ctx::Context{S},l::Int) where {S,T}
     return @views ctx[end-l+1:end]
 end
 
-
 struct View{S,T}
 
     # VIEW OF A SEQUENCE
@@ -135,6 +134,10 @@ generate_hgrams(v::View,::Unbounded) = generate_hgrams(v)
 
 
 non_nan(a::Int,b::Int)::Float64 = (x = a/b; isnan(x) ? 0 : x)
+
+
+
+
 
 using DataStructures
 
@@ -243,6 +246,9 @@ function typecount(::X, c::Counter{T}) where T
     return nsymcount(1,ctx,tally,seen)+1
 end
 
+
+
+# The TYPE OF TALLYS
 
 Tally{S,T} = Dict{Context{S},Counter{T}}
 
@@ -385,9 +391,7 @@ function select_order(v::View{S,T},
                       seen::Set{T},
                       O::Unbounded) where {S,T}
 
-    nxt = getnext(v,i)
-
-    ctx = getcontext(v,i)
+    nxt, ctx = getngram(v,i)
 
     length(ctx) == 0 && return nxt, ctx
 
@@ -414,6 +418,13 @@ end
 
 Distribution{T} = Dict{T,Float64}
 
+struct Prediction{T}
+    symbol::T
+    estimate::Float64
+    order::Int
+    distribution::Distribution{T}
+end
+
 domain(d::Distribution) = keys(d)
 
 normalise!(d::Distribution) = (total = sum(values(d)); map!(x->x/total,values(d)))
@@ -421,16 +432,27 @@ normalise!(d::Distribution) = (total = sum(values(d)); map!(x->x/total,values(d)
 (d::Distribution{T})(e::T) where T = Base.get(d,e,0)
 
 infcontent(d::Distribution{T},e::T) where T = - log(2,d(e))
+infcontent(x::Prediction) = infcontent(x.distribution,x.symbol)
+
 
 entropy(d::Distribution) = sum([d(e)*infcontent(d,e) for e in domain(d)])
+entropy(x::Prediction) = entropy(x.distribution)
+
 
 max_entropy(d::Distribution) = log(2,length(domain(d)))
+max_entropy(x::Prediction) = max_entropy(x.distribution)
+
 
 relative_entropy(d::Distribution) = (hm=max_entropy(d); hm>0 ? entropy(d) / hm : 1 )
+relative_entropy(x::Prediction) = relative_entropy(x.distribution)
+
 
 weight(d::Distribution,b::Int) = relative_entropy(d) ^ (-b)
+weight(x::Prediction,b::Int) = weight(x.distribution,b)
 
-function combine(ds::Vector{Distribution{T}}; b::Int=0) where T
+
+function combine(ds::Vector{Distribution{T}},
+                 b::Int=0) where T
 
     A = union([domain(d) for d in ds]...)
 
@@ -440,39 +462,26 @@ function combine(ds::Vector{Distribution{T}}; b::Int=0) where T
 
     estimates = [(e=>sum([ws[m] * ds[m](e) for m in 1:length(ds)]) / sum_weights) for e in A]
     
-    return Distribution{T}(estimates)
+    return normalise!(Distribution{T}(estimates))
     
 end
 
-
-struct Prediction{T}
-    symbol::T
-    estimate::Float64
-    order::Int
-    distribution::Distribution{T}
-end
-
-infcontent(x::Prediction) = infcontent(x.distribution,x.symbol)
-
-entropy(x::Prediction) = entropy(x.distribution)
-
-max_entropy(x::Prediction) = max_entropy(x.distribution)
-
-relative_entropy(x::Prediction) = relative_entropy(x.distribution)
-
-weight(x::Prediction,b::Int) = weight(x.distribution,b)
-
-mean_infcontent(ps::Vector{Prediction}) = sum([infcontent(p) for p in ps])/length(ps)
-
-function combine(ps;b)
+function combine(ps::Vector{Prediction{T}},
+                 b::Int=0) where T
+    
     sym = ps[1].symbol
     ds = [p.distribution for p in ps]
     os = [p.order for p in ps]
-    new_dist = Distributions.combine(ds;b=b)
+    new_dist = Distributions.combine(ds,b)
     p = new_dist(sym)
     o = max(os...)
     Prediction(sym,p,o,new_dist)
 end
+
+
+mean_infcontent(ps::Vector{Prediction}) = sum([infcontent(p) for p in ps])/length(ps)
+
+
 
 
 # PREDICT
@@ -493,6 +502,8 @@ function ppm(nxt::T,
         dist[e] = p
         ords[e] = o
     end
+
+    normalise!(dist)
     
     return Prediction(nxt,dist[nxt],ords[nxt],dist)
     
@@ -649,7 +660,7 @@ function ppm_ltm_plus(data::Vector{View{S,T}},
 
     db = [train(t,O) for t in training]
     # Should fresh tallies be used for each test set? 
-    return [ppm_seq_inc(data[i],A,B,E,U,O; tally = db[folds[i]][1], seen = db[folds[i]][2]) for i in 1:length(data)]
+    return Vector{Prediction{T}}[ppm_seq_inc(data[i],A,B,E,U,O; tally = db[folds[i]][1], seen = db[folds[i]][2]) for i in 1:length(data)]
 end
 
 
@@ -668,7 +679,7 @@ function ppm_both(data::Vector{View{S,T}},
     stm = ppm_stm(data,A,B,E,U,O)
     ltm = ppm_ltm(data,A,B,E,U,O,nfolds)
 
-    return [[combine(Prediction[p1,p2];b=b) for (p1,p2) in zip(s,l)] for (s,l) in zip(stm,ltm)]
+    return [[combine(Prediction[p1,p2],b) for (p1,p2) in zip(s,l)] for (s,l) in zip(stm,ltm)]
 end
 
 function ppm_both_plus(data::Vector{View{S,T}},
@@ -685,7 +696,7 @@ function ppm_both_plus(data::Vector{View{S,T}},
     stm = ppm_stm(data,A,B,E,U,O)
     ltm = ppm_ltm_plus(data,A,B,E,U,O,nfolds)
 
-    return [[combine(Prediction[p1,p2];b=b) for (p1,p2) in zip(s,l)] for (s,l) in zip(stm,ltm)]
+    return [[combine(Prediction[p1,p2],b) for (p1,p2) in zip(s,l)] for (s,l) in zip(stm,ltm)]
 end
 
 
