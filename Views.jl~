@@ -1,0 +1,60 @@
+module Views
+
+using OptionType
+using Viewpoints
+
+export View
+export getelement, getcontext
+
+struct View{S,T}
+
+    # A view of a sequence
+    
+    # The source and target attributes of a sequence 
+    elements::Vector{Tuple{Option{S},Option{T}}}
+    # The indices of the target attribtue that are not none
+    index::Vector{Int}
+
+    function View(elems::Vector{Tuple{Option{S},
+                                      Option{T}}}) where {S,T}
+
+        # construct a view from a vector of tuples
+        
+        # vector of target attribtue
+        t = last.(elems)
+
+        # indices of on non-none targets
+        index = [i for (i,e) in enumerate(t) if e != none]
+
+        return new{S,T}(elems,index)
+    end
+
+    function View(seq::Vector,
+                  src::Viewpoints.Viewpoint{S},
+                  trg::Viewpoints.Viewpoint{T}) where {S,T}
+
+        # construct a view from a sequence and two viewpoints
+        
+        return View(Tuple{Option{S},Option{T}}[zip(vp_map(src,seq),vp_map(trg,seq))...])
+    end
+end
+
+# length of a view
+Base.length(v::View) = length(v.index)
+
+# get a vector of target attributes
+targetelements(v::View{S,T}) where {S,T} = [t for (s,t) in v.elements if t != none]
+
+# get a vector of source attribtues
+# contextelements(v::View{S,T}) where {S,T} = [s for (s,t) in v.elements]
+
+# get the target element at index i
+getelement(v::View{S,T},i::Int) where {S,T} = targetelements(v)[i]
+
+getcontext(v::View{S,T},i::Int) where {S,T} = S[s for (s,t) in v.elements[1:v.index[i]-1] if s != none]
+
+
+
+
+# end of module
+end

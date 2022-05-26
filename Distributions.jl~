@@ -1,0 +1,42 @@
+module Distributions
+
+export Distribution
+export infcontent, entropy, max_entropy, relative_entropy, weight, combine
+
+struct Distribution{T}
+    probabilities::Dict{T,Float64}
+    domain::Set{T}
+    function Distribution(D::Dict{T,Float64}) where T
+        estimates = Dict(D...)
+        total = sum(values(estimates))
+        map!(x->x/total,values(estimates))
+        return new{T}(estimates,keys(estimates))
+    end
+end
+
+(d::Distribution{T})(e::T) where {T} = Base.get(d.probabilities,e,0)
+
+
+infcontent(d::Distribution{T},e::T) where T = - log(2,d(e))
+entropy(d::Distribution) = sum([d(e)*infcontent(d,e) for e in d.domain])
+max_entropy(d::Distribution) = log(2,length(d.domain))
+relative_entropy(d::Distribution) = (hm=max_entropy(d); hm>0 ? entropy(d) / hm : 1 )
+weight(d::Distribution,b::Int) = relative_entropy(d) ^ (-b)
+
+
+function combine(ds::Vector{Distribution{T}}; b::Int=0) where T
+
+    A = union([d.domain for d in ds]...)
+
+    ws = [weight(d,b) for d in ds]
+
+    sum_weights = sum(ws)
+
+    estimates = [(e=>sum([ws[m] * ds[m](e) for m in 1:length(ds)]) / sum_weights) for e in A]
+    
+    return Distribution(Dict{T,Float64}(estimates))
+    
+end
+
+# end of module
+end

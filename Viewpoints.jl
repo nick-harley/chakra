@@ -1,55 +1,103 @@
-module Viewpoints
+module Viewpoints 
 
-export Viewpoint, AtomicViewpoint, LinkedViewpoint, DerivedViewpoint, DelayedViewpoint, ThreadedViewpoint, sub_sequences, seq_delay, vp_type, seq_delay, vp_map
+using ListType, OptionType, Chakra
 
-using Chakra
-
-const Seq = Vector{T} where T<:Chakra.Obj
-
-sub_sequences(s::Seq,n::Int)::Vector{Seq} = map(i->s[i:i+n],1:length(s)-n)
-sub_sequences(s::Seq)::Vecotr{Seq} = vcat(map(i->sub_sequences(s,i),1:length(s))...)
-seq_delay(s::Seq,n::Int)::Option{Seq} = isempty(s) ? nothing : (n <= 0 ? s : seq_delay(tl(s),n-1))
-
-
+export vp, link, compose, delay, thread, vp_map
 
 abstract type Viewpoint{T} end
 
+returntype(v::Viewpoint{T}) where T = T
+
 struct AtomicViewpoint{T} <: Viewpoint{T}
-    #typ::Type{S} where {S<:T}
-    att::Symbol
-    AtomicViewpoint(a::Symbol) = new{typ(a)}(a)
+    attribute::Symbol
+    returntypes::List{DataType}
+    AtomicViewpoint(a::Symbol) = new{Chakra.typ(a)}(a,[Chakra.typ(a)])
 end
 
-struct LinkedViewpoint{T1,T2} <: Viewpoint{Tuple{T1,T2}}
-    fst::Viewpoint{T1}
-    snd::Viewpoint{T2}
+function (v::AtomicViewpoint{T})(s::List)::Option{T} where T 
+    obind(lpeek(s), o->getatt(v.attribute,o))
 end
 
-struct DerivedViewpoint{T2} <: Viewpoint{T2}
-    #typ::Type{T2}
-    vp::Viewpoint{T1} where T1
-    fn::Function
-    DerivedViewpoint(v,f) = (t = Base.return_types(f)[1] ; new{t}(v,f) )
+struct LinkedViewpoint{T} <: Viewpoint{T}
+    components::List{Viewpoint}
+    returntypes::List{DataType}
+    LinkedViewpoint(v1::Viewpoint,v2::Viewpoint,vs::Viewpoint...) = begin
+        components = [v1,v2,vs...]
+        returntypes = [returntype(c) for c in components]
+        new{Tuple{returntypes...}}(components,returntypes)
+    end
+end
+
+function (v::LinkedViewpoint{T})(s::List)::Option{T} where T
+    res = []
+    for c in v.components
+        val = c(s)
+        if val == none
+            return none
+        end
+        push!(res,val)
+    end
+    #print(res)
+    return Tuple(res)
+end
+
+struct DerivedViewpoint{T} <: Viewpoint{T}
+    base::Viewpoint
+    modifier::Function
+    returntypes::Vector{DataType}
+    DerivedViewpoint(v::Viewpoint,f::Function) = begin
+        t = Base._return_type(f,Tuple(v.returntypes))
+        if t == Union{}
+            error("Type mismatch: The function $f is not composable with the viewpoint $v")
+        end
+        new{t}(v,f)
+    end
+end
+
+function (v::DerivedViewpoint{T})(s::Vector)::Option{T} where T
+    n = length(v.base.returntypes)
+    if n == 1
+        obind(v.base(s),(x)->v.modifier(x))
+    end
+    obind(v.base(s),(x)->v.modifier(x...))
 end
 
 struct DelayedViewpoint{T} <: Viewpoint{T}
-    vp::Viewpoint{T}
+    base::Viewpoint{T}
     lag::Int64
 end
 
-struct ThreadedViewpoint{T} <: Viewpoint{T}
-    test::Viewpoint{Bool}
-    vp::Viewpoint{T}
+function (v::DelayedViewpoint{T})(s::Vector)::Option{T} where T 
+    v.base(lpopn(s,v.lag))
 end
 
-vp_type(v::Viewpoint{T}) where T = T
-vp_type(v::DerivedViewpoint)::DataType = Base.return_types(v.fn)[1]
+struct ThreadedViewpoint{T} <: Viewpoint{T}
+    base::Viewpoint{T}
+    test::Viewpoint{Bool}
+end
 
-(v::AtomicViewpoint)(s::Seq) = op_fish(hd, Chakra.get(v.att))(s)
-(v::LinkedViewpoint)(s::Seq) = op_bind(v.fst(s), l -> op_bind(v.snd(s), r ->(l,r)))
-(v::DerivedViewpoint)(s::Seq) = op_bind(v.vp(s), as -> typeof(as)<:Tuple ? v.fn(as...) : op_map(v.fn)(as))
-(v::DelayedViewpoint)(s::Seq) = op_bind(seq_delay(s,v.lag),s2 -> v.vp(s2))
+function (v::ThreadedViewpoint{T})(s::Vector)::Option{T} where T
+    v.test(s) ? v.base(s) : none
+end
 
-vp_map(v::Viewpoint,s::Seq)::Vector = isempty(s) ? [] : v(s) == nothing ? vp_map(v,tl(s)) : [v(s),vp_map(v,tl(s))...]
 
+vp(x::Symbol) = AtomicViewpoint(x)
+link(v1::Viewpoint,v2::Viewpoint,vs::Viewpoint...) = LinkedViewpoint(v1,v2,vs...)
+compose(v::Viewpoint,f::Function) = DerivedViewpoint(v,f)
+delay(v::Viewpoint,l::Int) = DelayedViewpoint(v,l)
+thread(b::Viewpoint,t::Viewpoint) = ThreadedViewpoint(b,t)
+
+
+#function vp_map(v::Viewpoint{T},s::Vector)::Vector{T} where T
+#    list_rec(nil(T),(h,t,r)->option_rec(r,val->lpush(r,val),v(reverse(cons(h,t)))),reverse(s))
+#end
+
+
+function vp_map(v::Viewpoint,s::Vector)
+    return [v(s[1:n]) for n in 1:length(s)]
+end
+
+
+
+# end of module
 end

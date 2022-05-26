@@ -1,78 +1,94 @@
 module Chakra
 
-export hd, tl, Option, op_map, op_fish, op_bind, typ, associatedType, delim, set, get, parts, empty, ins, fnd, dom
+using ListType, OptionType
 
-hd(x::Vector)::Option = isempty(x) ? nothing : x[1]
-tl(x::Vector)::Vector = isempty(x) ? [] : x[2:length(x)]
+export FN
+export Att
+export delimit, particles, setatt, getatt, empty, find, insert, domain
+export sequence
 
-Option{T} = Union{T,Nothing}
 
-function op_map(f::Function)::Function
-    function (x...)
-        length(x) == 1 && x[1] == nothing ? nothing : f(x...)
+
+struct FN{A,B}
+    domain::Vector{DataType}
+    codomain::DataType
+    body::Function
+    FN(dom::Vector{DataType},cod::DataType,f::Function) = begin
+        if cod != Base._return_type(f,Tuple(dom))
+            error("Type mismatch.")
+        end
+        new{Tuple{dom...},cod}(dom,cod,f)
+    end
+    FN(dom::Vector{DataType},cod::DataType) = begin
+        
     end
 end
+function (f::FN{A,B})(xs...)::B where {A,B}
+    typeof(xs) != A ? error("Wront argument type.") : f.body(xs...)
+end
 
-op_bind(x,f) = x == nothing ? nothing : f(x)
-op_fish(f,g) = x -> op_bind(f(x),y-> g(y))
 
 
 
-typ(::Val{n}) where n = error("There is no associated type found")
-typ(n::Symbol) = typ(Val{n}())
+typ(::Val{a}) where a = error("The attribute name $a has not been associated with a type.")
 
-macro associatedType(n,T)
+typ(n::Symbol)::DataType = typ(Val{n}())
+
+macro Attribute(n,T)    
     esc(:(Chakra.typ(::Val{$n}) = $T))
 end
 
-struct ID end
-struct OBJ end
-struct Struct end
-
-type(::Type{ID}) = "Set"
-
-abstract type Id end
-abstract type Obj end
-abstract type Struc end
-
-type(::T) where T<:Id = ID()
-type(::T) where T<:Obj = OBJ()
-type(::T) where T<:Struc = STRUC()
-
-function delim(ps::Vector{Id})::Obj
-    error("No implementation of delim")
+struct Att{a,T}
+    a::Symbol
+    T::DataType
+    Att(a::Symbol) = begin
+        T = typ(a)
+        new{a,T}(a,T)
+    end
 end
 
-function set(o::Obj,a::Symbol,v::Any)::Obj
-    error("No implementation of setAtt")
+
+function delimit(ps::List{Id}) where Id
+    error("No implementation of delimit.")
+end
+function particles(o::Obj) where Obj
+    error("No implementation of particles.")
+end
+function getatt(::Att{a,T},o::Obj) where {a,T,Obj}
+    error("No implementation of getatt.")
+end
+function setatt(::Att{a,T},v::T,o::Obj) where {a,T,Obj}
+    error("No implementation of setatt.")
+end
+function empty(T::DataType)
+    error("No implementation of empty.")
+end
+function insert(x::Id,o::Obj,s::Str) where {Id,Obj,Str}
+    error("No implementation of insert.")
+end
+function find(x::Id,s::Str) where {Id,Str}
+    error("No implementation of find.")
+end
+function domain(s::Str) where Str
+    error("No implementation of domain.")
 end
 
-set(a::Symbol) = (o::Obj,v::Any) -> set(o,a,v)
 
-function get(o::Obj,a::Symbol)
-    error("No implementation of get")
+
+
+# ADDITIONAL OPERATIONS
+
+delimit(Id::DataType) = delimit(Id[])
+
+getatt(a::Symbol,o) = getatt(Att(a),o)
+
+setatt(a::Symbol,v,o) = setatt(Att(a),v,o)
+
+sequence(xs::List,s)::Option{List} = begin
+    list_rec(nil(),(h,t,r)->obind(find(h,s),o->obind(r,rec->cons(o,rec))),xs)
 end
 
-get(a::Symbol) = (o::Obj) -> get(o,a)
 
-function parts(o::Obj)::Vector{Id}
-    error("No implementation of getParts")
-end
 
-function empty()::Struc
-    error("No implementation of emp")
-end
-
-function ins(x::Id,o::Obj,s::Struc)::Struc
-    error("No implementation of ins")
-end
-
-function fnd(x::Id,s::Struc)::Option{Obj}
-    error("No implementation of lup")
-end
-
-function dom(s::Struc)::Vector{Id}
-    error("No implementation of dom")
-end
-
+#end of module
 end

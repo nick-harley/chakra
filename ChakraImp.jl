@@ -1,37 +1,46 @@
 module ChakraImp
 
-using Chakra
-import Chakra: delim, set, get, parts, empty, fnd, ins, dom
+using ListType, OptionType, Chakra
 
-struct Id <: Chakra.Id 
-    val::Int64
+
+Id = Symbol
+Obj = Tuple{List{Id},Dict{Symbol,Any}}
+Str = Dict{Id,Obj}
+
+function Chakra.delimit(ps::List{Id})::Obj 
+    (ps,Dict{Symbol,Any}())
 end
 
-struct Obj <: Chakra.Obj
-    particles::Vector{Id}
-    attributes::Base.ImmutableDict{Symbol,Any}
+function Chakra.particles(o::Obj)::List{Id}
+    o[1]
 end
 
-struct Struc <: Chakra.Struc
-    constituents::Dict{Id,Obj}
+function Chakra.getatt(::Att{a,T},o::Obj)::Option{T} where {a,T}
+    as = o[2]
+    haskey(as,a) ? as[a] : none
 end
 
-delim(ps::Vector{Id})::Obj = Obj(ps,Base.ImmutableDict{Symbol,Any}())
+function Chakra.setatt(::Att{a,T},v::T,o::Obj)::Obj where {a,T}
+    (o[1],Dict(o[2]...,a=>v))
+end
 
-delim()::Obj = delim(Id[])
+function Chakra.empty(::Type{Obj})::Str
+    Dict{Id,Obj}()
+end
 
-set(o::Obj,a::Symbol,v)::Obj = Obj(o.particles,Base.ImmutableDict(o.attributes,a=>v))
+function Chakra.insert(x::Id,o::Obj,s::Str)::Str 
+    Dict(s...,x=>o)
+end
 
-get(o::Obj,a::Symbol)::Option{Any} = Base.get(o.attributes,a,nothing)
+function Chakra.find(x::Id,s::Str)::Option{Obj} 
+    haskey(s,x) ? s[x] : none
+end
 
-parts(o::Obj)::List{Id} = o.particles
+function Chakra.domain(s::Str)::List{Id} 
+    collect(keys(s))
+end
 
-empty() = Struc(Dict{Id,Obj}())
 
-fnd(x::Id,s::Struc)::Option{Obj} = get(s.constituents,x,nothing)
 
-ins(x::Id,o::Obj,s::Struc)::Struc = (s.constituents[x] = o ; s)
-
-dom(s::Struc)::List{id} = keys(s.constituents)
-
+# end of module
 end
