@@ -64,8 +64,8 @@ struct View{S,T}
     end
 
     function View(seq::Vector,
-                  src::Viewpoints.Viewpoint{S},
-                  trg::Viewpoints.Viewpoint{T}) where {S,T}
+                  src::Viewpoint{S},
+                  trg::Viewpoint{T}) where {S,T}
 
         # CONSTRUCT VIEW FROM SEQUENCE AND TWO VIEWPOINTS
         
@@ -324,7 +324,7 @@ function estimate(nxt::T,
     
     n == 0 && return e/(length(A)+1-length(seen)), -1         
 
-    union!(ex,symset(counter))
+    U && union!(ex,symset(counter))
     
     @views p, o = estimate(nxt,ctx[2:end],tally,seen,A,B,E,U,ex)
 
@@ -361,18 +361,23 @@ function estimate(nxt::T,
                  state_count + type_count)
 
     e = 1 - w
+
+    e == 0 && error("SOMETHING WRONG")
     
     if n==0
-        return (prob = w*p + e/(length(A)+1-length(seen)),
-                order = p == 0 ? -1 : 0)
+
+        p == 0 && return e / (length(A)+1-length(seen)), -1
+
+        return w*p + (e/(length(A)+1-length(seen))), 0
     end
 
-    union!(ex,symset(counter))
+    U && union!(ex,symset(counter))
     
     @views _p, o = estimate(nxt,ctx[2:end],tally,seen,A,B,E,U,ex)
+
+    p == 0 && return e*_p, o
     
-    return (prob = w*p + e*_p,
-            order = p == 0 ? o : n)
+    return w*p + e*_p, n
 end
 
 
@@ -461,8 +466,11 @@ function combine(ds::Vector{Distribution{T}},
     sum_weights = sum(ws)
 
     estimates = [(e=>sum([ws[m] * ds[m](e) for m in 1:length(ds)]) / sum_weights) for e in A]
+
+    dist = Distribution{T}(estimates)
+    normalise!(dist)
     
-    return normalise!(Distribution{T}(estimates))
+    return dist
     
 end
 
@@ -472,16 +480,24 @@ function combine(ps::Vector{Prediction{T}},
     sym = ps[1].symbol
     ds = [p.distribution for p in ps]
     os = [p.order for p in ps]
-    new_dist = Distributions.combine(ds,b)
+    new_dist = combine(ds,b)
     p = new_dist(sym)
     o = max(os...)
     Prediction(sym,p,o,new_dist)
 end
 
 
-mean_infcontent(ps::Vector{Prediction}) = sum([infcontent(p) for p in ps])/length(ps)
+function mean_infcontent(ps::Vector{Prediction{T}}) where T
 
+    return sum([infcontent(p) for p in ps])/length(ps)
 
+end
+
+function mean_infcontent(pss::Vector{Vector{Prediction{T}}}) where T
+
+    return sum([mean_infcontent(ps) for ps in pss])/length(pss)
+
+end
 
 
 # PREDICT
@@ -526,6 +542,7 @@ function ppm_seq(v::View{S,T},
         nxt,ctx = select_order(v,i,tally,seen,O)
         pred = ppm(nxt,ctx,tally,seen,A,B,E,U)
         push!(predictions,pred)
+        #push!(predictions,ppm(select_order(v,i,tally,seen,O)...,tally,seen,A,B,E,U))
     end
     
     return predictions
@@ -565,7 +582,7 @@ end
 function folddataset(data::Vector{View{S,T}},
                      nfolds::Int) where {S,T}
 
-    # CREATE FOLDS
+    # PARTITION DATASET INTO N FOLDS
 
     size = length(data)
     
@@ -574,7 +591,6 @@ function folddataset(data::Vector{View{S,T}},
     end
 
     # ASSIGN EACH VIEW TO A FOLD
-
     folds = Int[Int(round(i/nfolds % 1 *nfolds)) for i in 1:size]
     
     folds[findall(x->x==0,folds)] .= nfolds
@@ -582,19 +598,18 @@ function folddataset(data::Vector{View{S,T}},
     folds = sort(folds)
 
     # CREATE A TRAINING SET FOR EACH FOLD
-    
     training_sets = Vector{View{S,T}}[data[findall(x->x != i,folds)] for i in 1:nfolds]
     
     return folds, training_sets
 
 end
 
-function train(examples::Vector{View{S,T}},
+function train(data::Vector{View{S,T}},
                O::OrderBound) where {S,T}
 
     # CREATE A TALLY FROM A SET OF VIEWS
     
-    gs = vcat([generate_hgrams(ex,O) for ex in examples]...)
+    gs = vcat([generate_hgrams(ex,O) for ex in data]...)
 
     seen = Set([g.first for g in gs])
 
@@ -632,11 +647,9 @@ function ppm_ltm(data::Vector{View{S,T}},
 
     # LTM
 
-    print("Folding dataset...\n")
-    @time folds, training = folddataset(data,nfolds)
+    folds, training = folddataset(data,nfolds)
     
-    print("Creating dbs...\n")
-    @time db = [train(t,O) for t in training]
+    db = [train(t,O) for t in training]
 
     tally = first.(db)
     seen = last.(db)
@@ -679,7 +692,7 @@ function ppm_both(data::Vector{View{S,T}},
     stm = ppm_stm(data,A,B,E,U,O)
     ltm = ppm_ltm(data,A,B,E,U,O,nfolds)
 
-    return [[combine(Prediction[p1,p2],b) for (p1,p2) in zip(s,l)] for (s,l) in zip(stm,ltm)]
+    return [[combine(Prediction{T}[p1,p2],b) for (p1,p2) in zip(s,l)] for (s,l) in zip(stm,ltm)]
 end
 
 function ppm_both_plus(data::Vector{View{S,T}},
@@ -696,7 +709,7 @@ function ppm_both_plus(data::Vector{View{S,T}},
     stm = ppm_stm(data,A,B,E,U,O)
     ltm = ppm_ltm_plus(data,A,B,E,U,O,nfolds)
 
-    return [[combine(Prediction[p1,p2],b) for (p1,p2) in zip(s,l)] for (s,l) in zip(stm,ltm)]
+    return [[combine(Prediction{T}[p1,p2],b) for (p1,p2) in zip(s,l)] for (s,l) in zip(stm,ltm)]
 end
 
 
@@ -729,7 +742,37 @@ function todataframe(ps::Vector{Vector{Prediction{T}}}) where {T}
 end
 
 
+# function getalphabet(data::Vector{View{S,T}})::Set{T} where {S,T}
+
+struct IdyomParameters
+    E::Escape
+    O::OrderBound
+end
 
 
+function getviews(seq::Vector,
+                  trg::Viewpoint{T},
+                  srcs::Vector{Viewpoint{S} where S}) where T
+
+    return map(s->View(seq,s,trg),srcs)   
+
+end
+
+
+function idyom(seq::Vector,
+               trg::Viewpoint{T},
+               srcs::Vector{Viewpoint{S} where S}) where T
+
+    # construct views
+
+    views = getviews(seq,trg,srcs)
+    
+    # construct models
+
+    # combine models
+    
+
+end
+    
 # end of module
 end

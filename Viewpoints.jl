@@ -2,6 +2,7 @@ module Viewpoints
 
 using ListType, OptionType, Chakra
 
+export Viewpoint
 export vp, link, compose, delay, thread, vp_map
 
 abstract type Viewpoint{T} end
