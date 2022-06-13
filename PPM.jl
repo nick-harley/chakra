@@ -11,7 +11,8 @@ export infcontent, entropy
 
 export ppm, ppm_seq, ppm_seq_inc
 
-using OptionType, Viewpoints
+
+using Chakra, Viewpoints
 
 
 ### ORDER BOUNDS

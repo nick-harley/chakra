@@ -1,9 +1,10 @@
 module Viewpoints 
 
-using ListType, OptionType, Chakra
+using Chakra
 
 export Viewpoint
 export vp, link, compose, delay, thread, vp_map
+
 
 abstract type Viewpoint{T} end
 
@@ -12,7 +13,7 @@ returntype(v::Viewpoint{T}) where T = T
 struct AtomicViewpoint{T} <: Viewpoint{T}
     attribute::Symbol
     returntypes::List{DataType}
-    AtomicViewpoint(a::Symbol) = new{Chakra.typ(a)}(a,[Chakra.typ(a)])
+    AtomicViewpoint(a::Symbol) = new{Chakra.__typ__(a)}(a,[Chakra.__typ__(a)])
 end
 
 function (v::AtomicViewpoint{T})(s::List)::Option{T} where T 
@@ -82,19 +83,34 @@ function (v::ThreadedViewpoint{T})(s::Vector)::Option{T} where T
 end
 
 
+# Viewpoint constructor interface
+
 vp(x::Symbol) = AtomicViewpoint(x)
+
 link(v1::Viewpoint,v2::Viewpoint,vs::Viewpoint...) = LinkedViewpoint(v1,v2,vs...)
+
 compose(v::Viewpoint,f::Function) = DerivedViewpoint(v,f)
+
 delay(v::Viewpoint,l::Int) = DelayedViewpoint(v,l)
+
 thread(b::Viewpoint,t::Viewpoint) = ThreadedViewpoint(b,t)
 
 
-#function vp_map(v::Viewpoint{T},s::Vector)::Vector{T} where T
-#    list_rec(nil(T),(h,t,r)->option_rec(r,val->lpush(r,val),v(reverse(cons(h,t)))),reverse(s))
-#end
+
+# Additional viewpoint constructors
+
+diff(v::Viewpoint{T}) where T = compose(link(v,delay(v,1)),(x,y)->x-y)
 
 
-function vp_map(v::Viewpoint,s::Vector)
+
+
+
+
+
+function vp_map(v::Viewpoint{T},s::Vector)::List{Option{T}} where T
+
+    # Maps a viewpoint of a sequence
+
     return [v(s[1:n]) for n in 1:length(s)]
 end
 

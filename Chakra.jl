@@ -1,48 +1,111 @@
 module Chakra
 
-using ListType, OptionType
 
-export FN
+export List
+export nil, cons, isnil, list_rec, gethead, gettail, append, lmap, ljoin, lpush, lpop, lpopn, lpeek, lpeekn
+
+
+export Option
+export none, option_rec, omap, obind
+
+
 export Att
 export delimit, particles, setatt, getatt, empty, find, insert, domain
 export sequence
 
 
 
-struct FN{A,B}
-    domain::Vector{DataType}
-    codomain::DataType
-    body::Function
-    FN(dom::Vector{DataType},cod::DataType,f::Function) = begin
-        if cod != Base._return_type(f,Tuple(dom))
-            error("Type mismatch.")
-        end
-        new{Tuple{dom...},cod}(dom,cod,f)
-    end
-    FN(dom::Vector{DataType},cod::DataType) = begin
-        
-    end
-end
-function (f::FN{A,B})(xs...)::B where {A,B}
-    typeof(xs) != A ? error("Wront argument type.") : f.body(xs...)
+# OPTION
+
+struct None end
+none = None()
+some(x::A) where A = a
+
+Option{A} = Union{A,None}
+
+function option_rec(pnone,psome::Function,x::Option{A}) where A
+    x isa None ? pnone : psome(x)
 end
 
+omap(f::Function,x::Option{A}) where A = option_rec(none,f,x)
+
+obind(x::Option{A},f::Function) where A = option_rec(none,f,x)
 
 
 
-typ(::Val{a}) where a = error("The attribute name $a has not been associated with a type.")
 
-typ(n::Symbol)::DataType = typ(Val{n}())
+
+
+
+# LIST
+
+List{T} = Vector{T}
+
+nil(::Type{T}) where T = T[]
+nil() = Any[]
+cons(h::T,t::List{T}) where T = T[h,t...]
+isnil(l::List) = isempty(l)
+
+function list_rec(pnil,pcons::Function,x::Vector) 
+    function F(l)
+        isnil(l) ? pnil : pcons(l[1],l[2:end],F(l[2:end]))
+    end
+    return F(x)
+end
+
+function gethead(l::List{A})::Option{A} where A 
+    list_rec(none,(h,t,r)->h,l)
+end
+function gettail(l::List{A})::List{A} where A
+    list_rec(nil(A),(h,t,r)->t,l)
+end
+function append(l1::List{A},l2::List{A})::List{A} where A
+    list_rec(l2,(h,t,r)->cons(h,r),l1)
+end
+function lmap(f::Function,l::List{A})::List where A
+    list_rec(nil(),(h,t,r)->cons(f(h),r),l)
+end
+function ljoin(ll::List{List{A}})::List{A} where A
+    list_rec(nil(A),(h,t,r)->append(h,r),ll)
+end
+function lpush(l::List{A},x::A)::List{A} where A
+    list_rec(cons(x,nil(A)),(h,t,r)->cons(h,r),l)
+end
+function lpop(l::List{A})::List{A} where A
+    list_rec(nil(A),(h,t,r)->isnil(t) ? r : cons(h,r),l)
+end
+function lpopn(l::List{A},n::Int)::List{A} where A
+    n <= 0 ? l : lpopn(lpop(l),n-1)
+end
+function lpeek(l::List{A})::Option{A} where A
+    list_rec(none,(h,t,r)->isnil(t) ? h : r,l)
+end
+function lpeekn(l::List{A},n::Int)::Option{A} where A
+    lpeek(lpopn(l,n))
+end
+
+
+
+
+
+
+
+
+# DEPENDENT FAMILIES
+
+__typ__(::Val{a}) where a = error("The attribute name $a has not been associated with a type.")
+
+__typ__(n::Symbol)::DataType = __typ__(Val{n}())
 
 macro Attribute(n,T)    
-    esc(:(Chakra.typ(::Val{$n}) = $T))
+    esc(:(Chakra.__typ__(::Val{$n}) = $T))
 end
 
 struct Att{a,T}
     a::Symbol
     T::DataType
     Att(a::Symbol) = begin
-        T = typ(a)
+        T = __typ__(a)
         new{a,T}(a,T)
     end
 end
@@ -60,11 +123,17 @@ end
 function setatt(::Att{a,T},v::T,o::Obj) where {a,T,Obj}
     error("No implementation of setatt.")
 end
+function setatt!(::Att{a,T},v::T,o::Obj) where {a,T,Obj}
+    error("No implementation of setatt!.")
+end
 function empty(T::DataType)
     error("No implementation of empty.")
 end
 function insert(x::Id,o::Obj,s::Str) where {Id,Obj,Str}
     error("No implementation of insert.")
+end
+function insert!(x::Id,o::Obj,s::Str) where {Id,Obj,Str}
+    error("No implementation of insert!.")
 end
 function find(x::Id,s::Str) where {Id,Str}
     error("No implementation of find.")
