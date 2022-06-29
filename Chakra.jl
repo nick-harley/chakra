@@ -11,6 +11,9 @@ export none, option_rec, omap, obind
 
 export Att
 export delimit, particles, setatt, getatt, empty, find, insert, domain
+
+export setatt!, insert!
+
 export sequence
 
 
@@ -123,17 +126,11 @@ end
 function setatt(::Att{a,T},v::T,o::Obj) where {a,T,Obj}
     error("No implementation of setatt.")
 end
-function setatt!(::Att{a,T},v::T,o::Obj) where {a,T,Obj}
-    error("No implementation of setatt!.")
-end
 function empty(T::DataType)
     error("No implementation of empty.")
 end
 function insert(x::Id,o::Obj,s::Str) where {Id,Obj,Str}
     error("No implementation of insert.")
-end
-function insert!(x::Id,o::Obj,s::Str) where {Id,Obj,Str}
-    error("No implementation of insert!.")
 end
 function find(x::Id,s::Str) where {Id,Str}
     error("No implementation of find.")
@@ -142,20 +139,46 @@ function domain(s::Str) where Str
     error("No implementation of domain.")
 end
 
+# Persistent structures
 
-
+function insert!(x::Id,o::Obj,s::Str) where {Id,Obj,Str}
+    error("No implementation of insert!.")
+end
+function setatt!(::Att{a,T},v::T,o::Obj) where {a,T,Obj}
+    error("No implementation of setatt!.")
+end
 
 # ADDITIONAL OPERATIONS
 
 delimit(Id::DataType) = delimit(Id[])
 
+particles(x::Id,s::Str) = obind(find(x,s),o->particles(o))
+
 getatt(a::Symbol,o) = getatt(Att(a),o)
+
+getatt(a::Symbol,x,s) where {Id,Str} = obind(find(x,s),o->getatt(a,o))
 
 setatt(a::Symbol,v,o) = setatt(Att(a),v,o)
 
-sequence(xs::List,s)::Option{List} = begin
+setatt!(a::Symbol,v,o) = setatt!(Att(a),v,o)
+
+function sequence(xs::List,s)::Option{List}
+
+    # Dereference the list of ids to get their objects
+    
     list_rec(nil(),(h,t,r)->obind(find(h,s),o->obind(r,rec->cons(o,rec))),xs)
 end
+
+function sequenceparts(x::Id,s)::Option{List}
+
+    # Dereference the particles of an object
+
+    obind(particles(x,s),xs->sequence(xs,s))
+    
+end
+
+
+
 
 
 

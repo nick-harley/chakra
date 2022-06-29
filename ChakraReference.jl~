@@ -1,6 +1,6 @@
-module ChakraImp
+module ChakraReference
 
-using ListType, OptionType, Chakra
+using Chakra
 
 
 Id = Symbol
